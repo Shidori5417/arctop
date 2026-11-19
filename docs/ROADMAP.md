@@ -18,12 +18,12 @@ Atamalar önerilir; Opus `CLAUDE.md` karar ağacına göre değiştirebilir. �
 - [x] **T-007** `rust-coder` — `sampler` + `history` (§5), kontrol kanalı, testler
 - [x] **T-008** `helper` — `examples/dump.rs`: gerçek sistemde 3 snapshot alıp debug-print eder (kullanıcı çalıştırıp doğrular)
 
-- [ ] **Açık:** `vram_total` hiçbir kaynakça doldurulmuyor ("örneklenmedi" görünüyor); sysfs girdisi yok, neden "sysfs'de yok" olmalı (Faz 3 öncesi küçük kart, `helper`)
+- [x] **T-021** (açık madde): `vram_total` hiçbir kaynakça doldurulmuyor ("örneklenmedi" görünüyor); sysfs girdisi yok, neden "sysfs'de yok" olmalı (Faz 3 öncesi küçük kart, `helper`)
 
 ## Faz 3 — TUI
-- [ ] **T-009** 🔒 `rust-coder` — `App` durumu, olay döngüsü, görünüm geçişi, `render` imzaları, `theme.rs`, terminal restore (panic hook dahil)
-- [ ] **T-010** `hydrogen` — `ui/overview.rs` (göstergeler, motor çubukları, "—" durumları)
-- [ ] **T-011** `hydrogen` — `ui/charts.rs` (4 zaman serisi, 60 sn/5 dk)
+- [x] **T-009** 🔒 `rust-coder` — `App` durumu, olay döngüsü, görünüm geçişi, `render` imzaları, `theme.rs`, terminal restore (panic hook dahil)
+- [ ] **T-010** `glm` (Hydrogen yerine: elle handoff beklemesin diye) — `ui/overview.rs` (göstergeler, motor çubukları, "—" durumları)
+- [ ] **T-011** `glm` (Hydrogen yerine) — `ui/charts.rs` (4 zaman serisi, 60 sn/5 dk)
 - [ ] **T-012** `glm` — `ui/procs.rs` (tablo, sıralama, `/` filtre)
 - [ ] **T-013** `helper` — `ui/help.rs` + insta snapshot testleri
 - [ ] **Kullanıcı:** gerçek kartta elle dene, ekran görüntüsünü Opus'a anlat veya yapıştır
