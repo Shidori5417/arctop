@@ -12,11 +12,13 @@ Atamalar önerilir; Opus `CLAUDE.md` karar ağacına göre değiştirebilir. �
 - [x] **T-003** `glm` — `discover` (§2) + `pci_ids` tablosu; fixture testi
 
 ## Faz 2 — Metrik kaynakları (paralel)
-- [ ] **T-004** `glm` — `source/freq.rs` (i915 + xe yolları)
-- [ ] **T-005** `glm` — `source/hwmon.rs` (label eşleme, energy Δ → W)
-- [ ] **T-006** `rust-coder` — `source/fdinfo.rs` (client-id tekilleştirme, i915 ns ve xe cycles formülleri, pdev filtresi, süreç temizliği; performans hedefi SPEC'te)
-- [ ] **T-007** `rust-coder` — `sampler` + `history` (§5), kontrol kanalı, testler
-- [ ] **T-008** `helper` — `examples/dump.rs`: gerçek sistemde 3 snapshot alıp debug-print eder (kullanıcı çalıştırıp doğrular)
+- [x] **T-004** `glm` — `source/freq.rs` (i915 + xe yolları)
+- [x] **T-005** `glm` — `source/hwmon.rs` (label eşleme, energy Δ → W)
+- [x] **T-006** `rust-coder` — `source/fdinfo.rs` (client-id tekilleştirme, i915 ns ve xe cycles formülleri, pdev filtresi, süreç temizliği; performans hedefi SPEC'te)
+- [x] **T-007** `rust-coder` — `sampler` + `history` (§5), kontrol kanalı, testler
+- [x] **T-008** `helper` — `examples/dump.rs`: gerçek sistemde 3 snapshot alıp debug-print eder (kullanıcı çalıştırıp doğrular)
+
+- [ ] **Açık:** `vram_total` hiçbir kaynakça doldurulmuyor ("örneklenmedi" görünüyor); sysfs girdisi yok, neden "sysfs'de yok" olmalı (Faz 3 öncesi küçük kart, `helper`)
 
 ## Faz 3 — TUI
 - [ ] **T-009** 🔒 `rust-coder` — `App` durumu, olay döngüsü, görünüm geçişi, `render` imzaları, `theme.rs`, terminal restore (panic hook dahil)
