@@ -11,6 +11,14 @@ pub mod sampler;
 pub mod source;
 pub mod sysfs;
 
+pub use error::ReadError;
+pub use model::{
+    Capabilities, Device, Driver, EngineClass, EngineUsage, FreqInfo, Metric, ParseDriverError,
+    ProcUsage, Snapshot,
+};
+pub use source::MetricSource;
+pub use sysfs::SysFs;
+
 #[cfg(test)]
 mod tests {
     #[test]
