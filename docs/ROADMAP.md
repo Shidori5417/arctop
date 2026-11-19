@@ -9,7 +9,7 @@ Atamalar önerilir; Opus `CLAUDE.md` karar ağacına göre değiştirebilir. �
 ## Faz 1 — İskelet ve arayüzler
 - [x] **T-001** `helper` — cargo workspace, iki crate, bağımlılıklar (ARCHITECTURE §7), boş modüller, CI iskeleti
 - [x] **T-002** 🔒 `rust-coder` — `SysFs` (§1), `model` (§4), `MetricSource` trait'i (§3), hata tipleri; SysFs testleri
-- [ ] **T-003** `glm` — `discover` (§2) + `pci_ids` tablosu; fixture testi
+- [x] **T-003** `glm` — `discover` (§2) + `pci_ids` tablosu; fixture testi
 
 ## Faz 2 — Metrik kaynakları (paralel)
 - [ ] **T-004** `glm` — `source/freq.rs` (i915 + xe yolları)

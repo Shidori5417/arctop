@@ -10,7 +10,7 @@ Intel Arc GPU'lar için terminal tabanlı canlı izleme aracı. Rust ve ratatui 
 - `--json` / `--once` ile scriptlerden kullanılabilir
 
 **Birincil hedef:** Arc A750 (DG2, `i915` sürücüsü). **İkincil hedef:** `xe` sürücüsü ve Battlemage.
-**Durum:** Faz 1 (iskelet ve arayüzler) — bkz. `docs/ROADMAP.md`
+**Durum:** Faz 1 tamam, sırada Faz 2 (metrik kaynakları) — bkz. `docs/ROADMAP.md`
 
 ## Ajanlı geliştirme düzeni
 
