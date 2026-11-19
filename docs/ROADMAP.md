@@ -3,12 +3,12 @@
 Atamalar önerilir; Opus `CLAUDE.md` karar ağacına göre değiştirebilir. 🔒 = arayüz kartı (paralel işlerden önce main'e alınır).
 
 ## Faz 0 — Keşif
-- [ ] **Kullanıcı:** bir oyun ya da glxgears açıkken `scripts/discover-gpu.sh > docs/hw/a750.txt`, ardından birkaç saniye arayla `scripts/discover-gpu.sh --fixture tests/fixtures/a750/t0` ve `... t1`
-- [ ] **T-000** `helper` — `docs/hw/a750.txt` çıktısını oku ve `docs/SYSFS-NOTES.md` içindeki "Doğrulanmış değerler" tablosunu doldur; beklenenlerden sapmaları listele
+- [x] **Kullanıcı:** (Opus çalıştırdı, masaüstü boştayken — motor sayaçları 0; yük altında tekrar alınabilir) bir oyun ya da glxgears açıkken `scripts/discover-gpu.sh > docs/hw/a750.txt`, ardından birkaç saniye arayla `scripts/discover-gpu.sh --fixture tests/fixtures/a750/t0` ve `... t1`
+- [x] **T-000** `helper` — `docs/hw/a750.txt` çıktısını oku ve `docs/SYSFS-NOTES.md` içindeki "Doğrulanmış değerler" tablosunu doldur; beklenenlerden sapmaları listele
 
 ## Faz 1 — İskelet ve arayüzler
-- [ ] **T-001** `helper` — cargo workspace, iki crate, bağımlılıklar (ARCHITECTURE §7), boş modüller, CI iskeleti
-- [ ] **T-002** 🔒 `rust-coder` — `SysFs` (§1), `model` (§4), `MetricSource` trait'i (§3), hata tipleri; SysFs testleri
+- [x] **T-001** `helper` — cargo workspace, iki crate, bağımlılıklar (ARCHITECTURE §7), boş modüller, CI iskeleti
+- [x] **T-002** 🔒 `rust-coder` — `SysFs` (§1), `model` (§4), `MetricSource` trait'i (§3), hata tipleri; SysFs testleri
 - [ ] **T-003** `glm` — `discover` (§2) + `pci_ids` tablosu; fixture testi
 
 ## Faz 2 — Metrik kaynakları (paralel)
