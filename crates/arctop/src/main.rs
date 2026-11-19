@@ -1,7 +1,9 @@
 //! arctop: CLI ve TUI giriş noktası.
 
 mod app;
+mod cli;
 mod fmt;
+mod output;
 mod ui;
 
 use std::io::{self, Stdout};
@@ -11,11 +13,12 @@ use std::time::Duration;
 
 use anyhow::{Context, bail};
 use arctop_core::discover::discover;
-use arctop_core::sampler::Sampler;
+use arctop_core::sampler::{Sampler, sample_once};
 use arctop_core::source::fdinfo::FdinfoSource;
 use arctop_core::source::freq::FreqSource;
 use arctop_core::source::hwmon::HwmonSource;
 use arctop_core::{Device, MetricSource, SysFs};
+use clap::Parser;
 use crossbeam_channel::{Receiver, select};
 use crossterm::event::{self, Event};
 use crossterm::execute;
@@ -26,23 +29,61 @@ use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 
 use crate::app::{Action, App};
-
-/// Varsayılan örnekleme aralığı.
-const DEFAULT_INTERVAL: Duration = Duration::from_millis(1000);
+use crate::cli::Cli;
 
 fn main() -> anyhow::Result<()> {
+    let cli = Cli::parse();
     let fs = SysFs::real();
-    let dev = first_device(&fs)?;
-    run_tui(fs, dev, DEFAULT_INTERVAL)
+    let dev = select_device(&fs, cli.card)?;
+    if cli.once {
+        run_once(&fs, &cli, &dev)
+    } else {
+        run_tui(fs, dev, Duration::from_millis(cli.interval))
+    }
 }
 
-/// İlk Intel GPU'yu bulur; yoksa anlaşılır hata döner.
-fn first_device(fs: &SysFs) -> anyhow::Result<Device> {
+/// `--card N` verilmişse o kartı, yoksa ilk Intel GPU'yu döner.
+/// Kart bulunamazsa anlaşılır hata verir; varsa bulunan kartları listeler.
+fn select_device(fs: &SysFs, card: Option<u32>) -> anyhow::Result<Device> {
     let devices = discover(fs).context("GPU keşfi başarısız")?;
-    match devices.into_iter().next() {
-        Some(d) => Ok(d),
-        None => bail!("Intel GPU bulunamadı (/sys/class/drm altında i915/xe kartı yok)"),
+    if let Some(n) = card {
+        let list = devices
+            .iter()
+            .map(|d| format!("  card {} — {} ({})", d.card, d.name, d.pci_slot))
+            .collect::<Vec<_>>()
+            .join("\n");
+        return devices.into_iter().find(|d| d.card == n).with_context(|| {
+            if list.is_empty() {
+                "Intel GPU bulunamadı (/sys/class/drm altında i915/xe kartı yok)".to_string()
+            } else {
+                format!("card {n} bulunamadı; bulunan kartlar:\n{list}")
+            }
+        });
     }
+    devices
+        .into_iter()
+        .next()
+        .context("Intel GPU bulunamadı (/sys/class/drm altında i915/xe kartı yok)")
+}
+
+/// `--once`: kaynakları oluşturup her birinin `probe`'unu çağırır (ADR-009),
+/// iki örnek arasındaki `gap` = `--interval` ile tek ölçüm alır ve çıktıyı yazar.
+/// Raw mode/alternatif ekran açılmaz.
+fn run_once(fs: &SysFs, cli: &Cli, dev: &Device) -> anyhow::Result<()> {
+    let mut sources = default_sources();
+    // ADR-009: `sample_once` probe çağırmaz; probe'u çağıran tarafız.
+    for s in &mut sources {
+        s.probe(fs, dev);
+    }
+    let gap = Duration::from_millis(cli.interval);
+    let snap = sample_once(fs, dev, &mut sources, gap);
+    if cli.json {
+        let value = output::to_json(dev, &snap);
+        println!("{}", serde_json::to_string_pretty(&value)?);
+    } else {
+        println!("{}", output::to_text(dev, &snap));
+    }
+    Ok(())
 }
 
 /// Varsayılan metrik kaynakları.
@@ -162,5 +203,12 @@ mod tests {
     #[test]
     fn default_sources_has_three() {
         assert_eq!(default_sources().len(), 3);
+    }
+
+    #[test]
+    fn select_device_fails_without_intel_gpu() {
+        let fs = SysFs::with_root("/nonexistent");
+        assert!(select_device(&fs, None).is_err());
+        assert!(select_device(&fs, Some(0)).is_err());
     }
 }
