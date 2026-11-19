@@ -20,3 +20,9 @@ Geliştirme makinesinde A750 `card1` olarak görünüyor (card0 değil). Hiçbir
 
 ## ADR-007: xe yolları doğrulanmadan kodda yer alabilir (işaretli)
 Geliştirme makinesinde xe yok. xe için ARCHITECTURE §3'teki beklenen yollar koda girebilir, ancak `// DOĞRULANMADI (xe)` yorumuyla ve yalnızca `Driver::Xe` dalında. xe donanımında doğrulanınca yorum kaldırılır ve SYSFS-NOTES güncellenir.
+
+## ADR-008: Örnekleyici iki thread kullanır (ADR-001'i daraltır)
+Örnekleme tek thread'de kalır; yanına yalnızca kanal aktaran küçük bir iletici thread eklenir. Gerekçe: "kanal doluysa en eskiyi at" için gönderen bir Receiver klonu tutmak zorunda, bu da UI Receiver'ı düştüğünde kanalın kapanmasını engeller. İletici, kullanıcı kanalı kapanınca `Stop` gönderir. tokio yine yok.
+
+## ADR-009: `sample_once` probe çağırmaz
+`Sampler::spawn` probe'u kendisi çağırır; `sample_once` çağıran tarafın `probe` yapmasını bekler (`--once` uygulaması, T-014, bunu yapmalı).
