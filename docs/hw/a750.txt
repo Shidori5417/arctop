@@ -1,0 +1,213 @@
+# arctop keşif raporu — 2026-11-19T05:32:24+03:00
+kernel: 7.3.4-1-cachyos
+perf_event_paranoid: 2
+
+## card1
+device: 0x56a1
+driver: i915
+pci: 0000:03:00.0
+### frekans (i915)
+gt_act_freq_mhz = 0
+gt_boost_freq_mhz = 2400
+gt_cur_freq_mhz = 600
+gt_max_freq_mhz = 2400
+gt_min_freq_mhz = 300
+gt_RP0_freq_mhz = 2400
+gt_RP1_freq_mhz = 600
+gt_RPn_freq_mhz = 300
+### frekans (xe)
+### hwmon
+-- hwmon2 name = i915
+energy1_input = 467302016235
+fan1_input = 539
+in0_input = 0
+temp1_input = 48000
+power1_max = 190000000
+power1_rated_max = 0
+### vram / tile ile ilgili girdiler
+
+## PMU
+i915_0000_03_00.0 type=14
+  actual-frequency
+  actual-frequency.unit
+  bcs0-busy
+  bcs0-busy.unit
+  bcs0-sema
+  bcs0-sema.unit
+  bcs0-wait
+  bcs0-wait.unit
+  ccs0-busy
+  ccs0-busy.unit
+  ccs0-sema
+  ccs0-sema.unit
+  ccs0-wait
+  ccs0-wait.unit
+  interrupts
+  rc6-residency
+  rc6-residency.unit
+  rcs0-busy
+  rcs0-busy.unit
+  rcs0-sema
+  rcs0-sema.unit
+  rcs0-wait
+  rcs0-wait.unit
+  requested-frequency
+  requested-frequency.unit
+  software-gt-awake-time
+  software-gt-awake-time.unit
+  vcs0-busy
+  vcs0-busy.unit
+  vcs0-sema
+  vcs0-sema.unit
+  vcs0-wait
+  vcs0-wait.unit
+  vcs1-busy
+  vcs1-busy.unit
+  vcs1-sema
+  vcs1-sema.unit
+  vcs1-wait
+  vcs1-wait.unit
+  vecs0-busy
+  vecs0-busy.unit
+  vecs0-sema
+  vecs0-sema.unit
+  vecs0-wait
+  vecs0-wait.unit
+  vecs1-busy
+  vecs1-busy.unit
+  vecs1-sema
+  vecs1-sema.unit
+  vecs1-wait
+  vecs1-wait.unit
+
+## fdinfo (okunabilen DRM istemcileri, ilk 5)
+### pid 1815 (Hyprland) /proc/1815/fdinfo/20
+drm-driver:	i915
+drm-client-id:	21
+drm-pdev:	0000:03:00.0
+drm-total-system0:	0
+drm-shared-system0:	0
+drm-active-system0:	0
+drm-resident-system0:	0
+drm-purgeable-system0:	0
+drm-total-local0:	0
+drm-shared-local0:	0
+drm-active-local0:	0
+drm-resident-local0:	0
+drm-purgeable-local0:	0
+drm-total-stolen-local0:	0
+drm-shared-stolen-local0:	0
+drm-active-stolen-local0:	0
+drm-resident-stolen-local0:	0
+drm-purgeable-stolen-local0:	0
+drm-engine-render:	0 ns
+drm-engine-copy:	0 ns
+drm-engine-video:	0 ns
+drm-engine-capacity-video:	2
+drm-engine-video-enhance:	0 ns
+drm-engine-capacity-video-enhance:	2
+drm-engine-compute:	0 ns
+### pid 1815 (Hyprland) /proc/1815/fdinfo/34
+drm-driver:	i915
+drm-client-id:	20
+drm-pdev:	0000:03:00.0
+drm-total-system0:	0
+drm-shared-system0:	0
+drm-active-system0:	0
+drm-resident-system0:	0
+drm-purgeable-system0:	0
+drm-total-local0:	0
+drm-shared-local0:	0
+drm-active-local0:	0
+drm-resident-local0:	0
+drm-purgeable-local0:	0
+drm-total-stolen-local0:	0
+drm-shared-stolen-local0:	0
+drm-active-stolen-local0:	0
+drm-resident-stolen-local0:	0
+drm-purgeable-stolen-local0:	0
+drm-engine-render:	0 ns
+drm-engine-copy:	0 ns
+drm-engine-video:	0 ns
+drm-engine-capacity-video:	2
+drm-engine-video-enhance:	0 ns
+drm-engine-capacity-video-enhance:	2
+drm-engine-compute:	0 ns
+### pid 1815 (Hyprland) /proc/1815/fdinfo/37
+drm-driver:	i915
+drm-client-id:	22
+drm-pdev:	0000:03:00.0
+drm-total-system0:	384 KiB
+drm-shared-system0:	0
+drm-active-system0:	0
+drm-resident-system0:	0
+drm-purgeable-system0:	0
+drm-total-local0:	25088 KiB
+drm-shared-local0:	25088 KiB
+drm-active-local0:	0
+drm-resident-local0:	25088 KiB
+drm-purgeable-local0:	0
+drm-total-stolen-local0:	0
+drm-shared-stolen-local0:	0
+drm-active-stolen-local0:	0
+drm-resident-stolen-local0:	0
+drm-purgeable-stolen-local0:	0
+drm-engine-render:	0 ns
+drm-engine-copy:	0 ns
+drm-engine-video:	0 ns
+drm-engine-capacity-video:	2
+drm-engine-video-enhance:	0 ns
+drm-engine-capacity-video-enhance:	2
+drm-engine-compute:	0 ns
+### pid 1815 (Hyprland) /proc/1815/fdinfo/38
+drm-driver:	i915
+drm-client-id:	22
+drm-pdev:	0000:03:00.0
+drm-total-system0:	384 KiB
+drm-shared-system0:	0
+drm-active-system0:	0
+drm-resident-system0:	0
+drm-purgeable-system0:	0
+drm-total-local0:	25088 KiB
+drm-shared-local0:	25088 KiB
+drm-active-local0:	0
+drm-resident-local0:	25088 KiB
+drm-purgeable-local0:	0
+drm-total-stolen-local0:	0
+drm-shared-stolen-local0:	0
+drm-active-stolen-local0:	0
+drm-resident-stolen-local0:	0
+drm-purgeable-stolen-local0:	0
+drm-engine-render:	0 ns
+drm-engine-copy:	0 ns
+drm-engine-video:	0 ns
+drm-engine-capacity-video:	2
+drm-engine-video-enhance:	0 ns
+drm-engine-capacity-video-enhance:	2
+drm-engine-compute:	0 ns
+### pid 1815 (Hyprland) /proc/1815/fdinfo/39
+drm-driver:	i915
+drm-client-id:	22
+drm-pdev:	0000:03:00.0
+drm-total-system0:	384 KiB
+drm-shared-system0:	0
+drm-active-system0:	0
+drm-resident-system0:	0
+drm-purgeable-system0:	0
+drm-total-local0:	25088 KiB
+drm-shared-local0:	25088 KiB
+drm-active-local0:	0
+drm-resident-local0:	25088 KiB
+drm-purgeable-local0:	0
+drm-total-stolen-local0:	0
+drm-shared-stolen-local0:	0
+drm-active-stolen-local0:	0
+drm-resident-stolen-local0:	0
+drm-purgeable-stolen-local0:	0
+drm-engine-render:	0 ns
+drm-engine-copy:	0 ns
+drm-engine-video:	0 ns
+drm-engine-capacity-video:	2
+drm-engine-video-enhance:	0 ns
+drm-engine-capacity-video-enhance:	2
+drm-engine-compute:	0 ns
