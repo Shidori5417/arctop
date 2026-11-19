@@ -17,3 +17,6 @@ ratatui 0.29, crossterm 0.28, clap 4, thiserror 2, crossbeam-channel 0.5, serde 
 
 ## ADR-006: Kart yolu donanıma göre keşfedilir
 Geliştirme makinesinde A750 `card1` olarak görünüyor (card0 değil). Hiçbir kaynak kart numarası varsaymaz; `Device.card` keşiften gelir. fdinfo bellek değerleri `<n> KiB` biçimindedir, ayrıştırıcı birim son ekini işlemelidir.
+
+## ADR-007: xe yolları doğrulanmadan kodda yer alabilir (işaretli)
+Geliştirme makinesinde xe yok. xe için ARCHITECTURE §3'teki beklenen yollar koda girebilir, ancak `// DOĞRULANMADI (xe)` yorumuyla ve yalnızca `Driver::Xe` dalında. xe donanımında doğrulanınca yorum kaldırılır ve SYSFS-NOTES güncellenir.
