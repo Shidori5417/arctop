@@ -22,11 +22,11 @@ Atamalar önerilir; Opus `CLAUDE.md` karar ağacına göre değiştirebilir. �
 
 ## Faz 3 — TUI
 - [x] **T-009** 🔒 `rust-coder` — `App` durumu, olay döngüsü, görünüm geçişi, `render` imzaları, `theme.rs`, terminal restore (panic hook dahil)
-- [ ] **T-010** `glm` (Hydrogen yerine: elle handoff beklemesin diye) — `ui/overview.rs` (göstergeler, motor çubukları, "—" durumları)
-- [ ] **T-011** `glm` (Hydrogen yerine) — `ui/charts.rs` (4 zaman serisi, 60 sn/5 dk)
-- [ ] **T-012** `glm` — `ui/procs.rs` (tablo, sıralama, `/` filtre)
-- [ ] **T-013** `helper` — `ui/help.rs` + insta snapshot testleri
-- [ ] **Kullanıcı:** gerçek kartta elle dene, ekran görüntüsünü Opus'a anlat veya yapıştır
+- [x] **T-010** `glm` (Hydrogen yerine: elle handoff beklemesin diye) — `ui/overview.rs` (göstergeler, motor çubukları, "—" durumları)
+- [x] **T-011** `glm` (Hydrogen yerine) — `ui/charts.rs` (4 zaman serisi, 60 sn/5 dk)
+- [x] **T-012** `glm` — `ui/procs.rs` (tablo, sıralama, `/` filtre)
+- [x] **T-013** `helper` — `ui/help.rs` + insta snapshot testleri
+- [x] **Kullanıcı:** (Opus pty üzerinden gerçek kartta denedi: tüm görünümler, sıralama, F1, q) gerçek kartta elle dene, ekran görüntüsünü Opus'a anlat veya yapıştır
 
 ## Faz 4 — CLI ve çıktı
 - [ ] **T-014** `glm` — clap: `--interval`, `--card`, `--once`, `--json` (serde)
