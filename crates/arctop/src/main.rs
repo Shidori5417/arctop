@@ -4,6 +4,7 @@ mod app;
 mod cli;
 mod fmt;
 mod output;
+mod record;
 mod ui;
 
 use std::io::{self, Stdout};
@@ -30,6 +31,7 @@ use ratatui::backend::CrosstermBackend;
 
 use crate::app::{Action, App};
 use crate::cli::Cli;
+use crate::record::Recorder;
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -38,7 +40,8 @@ fn main() -> anyhow::Result<()> {
     if cli.once {
         run_once(&fs, &cli, &dev)
     } else {
-        run_tui(fs, dev, Duration::from_millis(cli.interval))
+        let recorder = cli.record.as_deref().map(Recorder::create).transpose()?;
+        run_tui(fs, dev, Duration::from_millis(cli.interval), recorder)
     }
 }
 
@@ -96,17 +99,48 @@ fn default_sources() -> Vec<Box<dyn MetricSource>> {
 }
 
 /// Örnekleyiciyi başlatıp TUI'yı çalıştırır; terminal her çıkış yolunda geri yüklenir.
-fn run_tui(fs: SysFs, dev: Device, interval: Duration) -> anyhow::Result<()> {
+fn run_tui(
+    fs: SysFs,
+    dev: Device,
+    interval: Duration,
+    recorder: Option<Recorder>,
+) -> anyhow::Result<()> {
     let (sampler, snap_rx) = Sampler::spawn(fs, dev.clone(), default_sources(), interval);
     let mut app = App::new(dev, sampler.capabilities(), interval);
+    let mut rec = RecordState::new(recorder);
 
     install_panic_hook();
     let mut terminal = init_terminal()?;
     // Guard, `?` ile dönüşte ve unwind'de Drop ile terminali geri yükler.
     let _guard = TerminalGuard;
-    let result = event_loop(&mut terminal, &mut app, &sampler, &snap_rx);
+    let result = event_loop(&mut terminal, &mut app, &sampler, &snap_rx, &mut rec);
     sampler.stop();
+    // Kayıt hatası terminal kapandıktan sonra gösterilir (TUI'yi düşürmez).
+    restore_terminal();
+    if let Some(e) = rec.err.take() {
+        eprintln!("arctop: kayıt durduruldu: {e:#}");
+    }
     result
+}
+
+/// TUI sırasında kayıt durumu. İlk yazma hatasında kayıt kapanır ve hata saklanır.
+struct RecordState {
+    rec: Option<Recorder>,
+    err: Option<anyhow::Error>,
+}
+
+impl RecordState {
+    fn new(rec: Option<Recorder>) -> Self {
+        Self { rec, err: None }
+    }
+
+    /// Snapshot'ı kayda yazar; kayıt açık değilse ya da daha önce hata verdiyse hiçbir şey yapmaz.
+    fn feed(&mut self, s: &arctop_core::Snapshot) {
+        if let Some(Err(e)) = self.rec.as_mut().map(|r| r.write(s)) {
+            self.rec = None;
+            self.err = Some(e);
+        }
+    }
 }
 
 /// Olay döngüsü: crossterm olayları ve snapshot kanalı `select!` ile dinlenir.
@@ -119,6 +153,7 @@ fn event_loop(
     app: &mut App,
     sampler: &Sampler,
     snap_rx: &Receiver<arctop_core::Snapshot>,
+    rec: &mut RecordState,
 ) -> anyhow::Result<()> {
     let ev_rx = spawn_event_reader();
     terminal.draw(|f| ui::draw(f, app))?;
@@ -136,7 +171,10 @@ fn event_loop(
                 Err(_) => bail!("olay okuyucu thread kapandı"),
             },
             recv(snap_rx) -> snap => match snap {
-                Ok(s) => app.on_snapshot(s),
+                Ok(s) => {
+                    rec.feed(&s);
+                    app.on_snapshot(s);
+                }
                 Err(_) => bail!("örnekleyici beklenmedik şekilde kapandı"),
             },
         }

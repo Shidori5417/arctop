@@ -12,6 +12,7 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 crossbeam-channel = "0.5"
 crossterm = "0.28"
+csv = "1"
 insta = "1"
 ratatui = "0.29"
 serde = { version = "1", features = ["derive"] }

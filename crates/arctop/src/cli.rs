@@ -1,5 +1,7 @@
 //! Komut satırı parametreleri (SPEC "CLI").
 
+use std::path::PathBuf;
+
 /// arctop CLI parametreleri.
 #[derive(clap::Parser, Debug)]
 #[command(
@@ -20,6 +22,9 @@ pub struct Cli {
     /// --once çıktısını JSON yaz
     #[arg(long, requires = "once")]
     pub json: bool,
+    /// TUI açıkken her ölçümü CSV'ye ekle
+    #[arg(long, value_name = "DOSYA", conflicts_with = "once")]
+    pub record: Option<PathBuf>,
 }
 
 #[cfg(test)]
@@ -61,6 +66,17 @@ mod tests {
         assert!(c.json);
         assert_eq!(c.interval, 1000);
         assert_eq!(c.card, None);
+    }
+
+    #[test]
+    fn record_conflicts_with_once() {
+        assert!(Cli::try_parse_from(["arctop", "--record", "x.csv", "--once"]).is_err());
+    }
+
+    #[test]
+    fn record_parsed_in_tui_mode() {
+        let c = Cli::try_parse_from(["arctop", "--record", "x.csv"]).unwrap();
+        assert_eq!(c.record, Some(PathBuf::from("x.csv")));
     }
 
     #[test]

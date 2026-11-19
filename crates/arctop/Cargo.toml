@@ -15,6 +15,7 @@ arctop-core = { path = "../arctop-core" }
 clap.workspace = true
 crossbeam-channel.workspace = true
 crossterm.workspace = true
+csv.workspace = true
 ratatui.workspace = true
 serde_json.workspace = true
 
