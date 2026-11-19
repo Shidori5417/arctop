@@ -1,0 +1,14 @@
+drm-driver:	xe
+drm-client-id:	1
+drm-pdev:	0000:03:00.0
+drm-total-system:	0
+drm-resident-system:	0
+drm-total-vram0:	8192 KiB
+drm-resident-vram0:	8192 KiB
+drm-cycles-rcs:	1500
+drm-total-cycles-rcs:	3000
+drm-cycles-vcs:	2000
+drm-total-cycles-vcs:	3000
+drm-engine-capacity-vcs:	2
+drm-cycles-other:	5
+drm-total-cycles-other:	3000
