@@ -1,0 +1,14 @@
+drm-driver:	i915
+drm-client-id:	3
+drm-pdev:	0000:0a:00.0
+drm-total-system0:	384 KiB
+drm-shared-system0:	0
+drm-active-system0:	0
+drm-resident-system0:	0
+drm-purgeable-system0:	0
+drm-total-local0:	5 MiB
+drm-shared-local0:	0
+drm-active-local0:	0
+drm-resident-local0:	5 MiB
+drm-purgeable-local0:	0
+drm-engine-render:	900000000000 ns
