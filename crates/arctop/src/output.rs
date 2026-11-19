@@ -27,6 +27,12 @@ fn metric_field<T: Copy>(
     }
 }
 
+/// f32 değeri 2 ondalığa yuvarlanmış f64'e çevirir; `0.7605677843093872` gibi
+/// f32→f64 gürültüsü JSON'a taşınmaz.
+fn round2(x: f32) -> f64 {
+    (x as f64 * 100.0).round() / 100.0
+}
+
 /// Frekans alt nesnesi; okunamayan alanlar `freq_mhz.<alan>` anahtarıyla bildirilir.
 fn freq_json(f: &FreqInfo, unavailable: &mut Map<String, Value>) -> Value {
     let mut m = Map::new();
@@ -52,7 +58,7 @@ fn engine_map(engines: &[EngineUsage]) -> Value {
     for e in engines {
         m.insert(
             e.class.as_fdinfo_key().to_string(),
-            Value::from(e.busy_pct as f64),
+            Value::from(round2(e.busy_pct)),
         );
     }
     Value::Object(m)
@@ -96,7 +102,7 @@ pub fn to_json(dev: &Device, s: &Snapshot) -> serde_json::Value {
     ] {
         root.insert(
             key.to_string(),
-            metric_field(field, key, |v| Value::from(v as f64), &mut unavailable),
+            metric_field(field, key, |v| Value::from(round2(v)), &mut unavailable),
         );
     }
     for (key, field) in [("fan_rpm", &s.fan_rpm), ("voltage_mv", &s.voltage_mv)] {
@@ -284,22 +290,37 @@ mod tests {
         assert_eq!(v["freq_mhz"]["min"], json!(300));
         assert_eq!(v["freq_mhz"]["max"], json!(2400));
         assert_eq!(v["freq_mhz"]["boost"], json!(null));
-        assert_eq!(v["power_w"].as_f64(), Some(35.2f32 as f64));
-        assert_eq!(v["power_limit_w"].as_f64(), Some(190.0f32 as f64));
-        assert_eq!(v["temp_c"].as_f64(), Some(48.0f32 as f64));
+        assert_eq!(v["power_w"].as_f64(), Some(35.2));
+        assert_eq!(v["power_limit_w"].as_f64(), Some(190.0));
+        assert_eq!(v["temp_c"].as_f64(), Some(48.0));
         assert_eq!(v["fan_rpm"], json!(720));
         assert_eq!(v["voltage_mv"], json!(755));
         assert_eq!(v["vram_used_bytes"], json!(1157603328));
         assert_eq!(v["vram_total_bytes"], json!(null));
-        assert_eq!(v["engines"]["render"].as_f64(), Some(12.5f32 as f64));
-        assert_eq!(v["engines"]["copy"].as_f64(), Some(0.0f32 as f64));
+        assert_eq!(v["engines"]["render"].as_f64(), Some(12.5));
+        assert_eq!(v["engines"]["copy"].as_f64(), Some(0.0));
         assert_eq!(v["procs"][0]["pid"], json!(1815));
         assert_eq!(v["procs"][0]["comm"], json!("Hyprland"));
         assert_eq!(v["procs"][0]["vram_bytes"], json!(26214400));
-        assert_eq!(
-            v["procs"][0]["engines"]["render"].as_f64(),
-            Some(3.1f32 as f64)
-        );
+        assert_eq!(v["procs"][0]["engines"]["render"].as_f64(), Some(3.1));
+    }
+
+    #[test]
+    fn floats_are_rounded_to_two_decimals() {
+        let mut s = snap();
+        s.power_w = Metric::Value(0.7605678_f32);
+        s.temp_c = Metric::Value(47.999_f32);
+        s.engines = vec![EngineUsage {
+            class: EngineClass::Render,
+            busy_pct: 33.337_f32,
+        }];
+        let v = to_json(&dev(), &s);
+        assert_eq!(v["power_w"].as_f64(), Some(0.76));
+        assert_eq!(v["temp_c"].as_f64(), Some(48.0));
+        assert_eq!(v["engines"]["render"].as_f64(), Some(33.34));
+        let text = v.to_string();
+        assert!(!text.contains("0.7605"), "uzun ondalık: {text}");
+        assert!(!text.contains("33.337"), "uzun ondalık: {text}");
     }
 
     #[test]

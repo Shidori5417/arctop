@@ -75,7 +75,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
         (
             busy,
             chart_def(
-                "Toplam doluluk (%)",
+                "En yoğun motor (%)",
                 "%",
                 0,
                 app.history.busy_total(),
@@ -322,7 +322,7 @@ mod tests {
             "Frekans (MHz)",
             "Güç (W)",
             "Sıcaklık (°C)",
-            "Toplam doluluk (%)",
+            "En yoğun motor (%)",
             "60 sn",
             "şimdi",
         ] {
@@ -353,6 +353,19 @@ mod tests {
         let text = draw(&unavailable_app(), 80, 24);
         assert!(text.contains("veri yok"));
         assert!(text.contains(DASH), "son değer yerine — görünmeli");
+    }
+
+    #[test]
+    fn no_panic_at_small_sizes() {
+        // 40x10 ve 20x4: veri var, veri yok ve örnek bekleniyor durumları panik atmamalı.
+        for (w, h) in [(40, 10), (20, 4)] {
+            draw(&App::sample(), w, h);
+            draw(&unavailable_app(), w, h);
+            let mut waiting = App::sample();
+            waiting.last = None;
+            waiting.history = History::new();
+            draw(&waiting, w, h);
+        }
     }
 
     #[test]

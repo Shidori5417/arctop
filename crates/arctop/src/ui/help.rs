@@ -99,13 +99,34 @@ fn missing_lines(app: &App) -> Vec<Line<'static>> {
     v
 }
 
-/// Eksik metrikleri `(ad, neden)` olarak toplar. Önce yetenekler, sonra son snapshot.
-/// Aynı `(ad, neden)` çifti yalnızca bir kez eklenir.
+/// Yetenek adı, alan adı ve görünen ad. Aynı metrik hem yetenek hem alan adıyla
+/// geldiğinde ikisi de aynı görünen adla tekilleşir. Listede olmayan yetenekler
+/// (ör. `freq.*`, `frekans.*`) adlarıyla görünür.
+const METRIC_LABELS: &[(&str, &str, &str)] = &[
+    ("hwmon.power", "power_w", "güç"),
+    ("hwmon.power_limit", "power_limit_w", "limit"),
+    ("hwmon.temp", "temp_c", "sıcaklık"),
+    ("hwmon.fan", "fan_rpm", "fan"),
+    ("hwmon.voltage", "voltage_mv", "voltaj"),
+    ("fdinfo.vram_used", "vram_used", "VRAM kullanımı"),
+    ("fdinfo.vram_total", "vram_total", "VRAM toplamı"),
+];
+
+/// Bir yetenek adı veya alan adı için görünen adı döndürür; tabloda yoksa girdinin kendisi.
+fn label_of(key: &str) -> &str {
+    METRIC_LABELS
+        .iter()
+        .find(|(cap, field, _)| *cap == key || *field == key)
+        .map_or(key, |(_, _, label)| label)
+}
+
+/// Eksik metrikleri `(görünen ad, neden)` olarak toplar. Önce yetenekler, sonra son snapshot.
+/// Aynı görünen ad yalnızca bir kez eklenir; ilk eklenen (yetenek) nedeni kalır.
 fn missing(app: &App) -> Vec<(String, &'static str)> {
     let mut out = Vec::new();
     for caps in &app.capabilities {
         for (name, m) in &caps.fields {
-            check(&mut out, name, m);
+            check(&mut out, label_of(name), m);
         }
     }
     if let Some(s) = &app.last {
@@ -114,13 +135,13 @@ fn missing(app: &App) -> Vec<(String, &'static str)> {
         check(&mut out, "frekans.min", &s.freq.min);
         check(&mut out, "frekans.max", &s.freq.max);
         check(&mut out, "frekans.boost", &s.freq.boost);
-        check(&mut out, "güç", &s.power_w);
-        check(&mut out, "limit", &s.power_limit_w);
-        check(&mut out, "sıcaklık", &s.temp_c);
-        check(&mut out, "fan", &s.fan_rpm);
-        check(&mut out, "voltaj", &s.voltage_mv);
-        check(&mut out, "vram_used", &s.vram_used);
-        check(&mut out, "vram_total", &s.vram_total);
+        check(&mut out, label_of("power_w"), &s.power_w);
+        check(&mut out, label_of("power_limit_w"), &s.power_limit_w);
+        check(&mut out, label_of("temp_c"), &s.temp_c);
+        check(&mut out, label_of("fan_rpm"), &s.fan_rpm);
+        check(&mut out, label_of("voltage_mv"), &s.voltage_mv);
+        check(&mut out, label_of("vram_used"), &s.vram_used);
+        check(&mut out, label_of("vram_total"), &s.vram_total);
     }
     out
 }
@@ -132,9 +153,9 @@ fn check<T>(out: &mut Vec<(String, &'static str)>, name: &str, m: &Metric<T>) {
     }
 }
 
-/// `(ad, neden)` çifti listede yoksa ekler.
+/// Görünen ad listede yoksa `(ad, neden)` çiftini ekler.
 fn add(out: &mut Vec<(String, &'static str)>, name: &str, reason: &'static str) {
-    if !out.iter().any(|(n, r)| n.as_str() == name && *r == reason) {
+    if !out.iter().any(|(n, _)| n.as_str() == name) {
         out.push((name.to_string(), reason));
     }
 }
@@ -142,7 +163,7 @@ fn add(out: &mut Vec<(String, &'static str)>, name: &str, reason: &'static str) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arctop_core::{FreqInfo, Snapshot};
+    use arctop_core::{Capabilities, FreqInfo, Snapshot};
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use std::time::Instant;
@@ -186,10 +207,11 @@ mod tests {
     #[test]
     fn sample_lists_missing_metrics_once() {
         let rows = missing(&App::sample());
+        // Yetenek "fan_rpm" ile snapshot alanı tek "fan" satırına düşer.
         let fan = rows.iter().filter(|(n, _)| n == "fan").count();
         let fan_rpm = rows.iter().filter(|(n, _)| n == "fan_rpm").count();
         assert_eq!(fan, 1);
-        assert_eq!(fan_rpm, 1);
+        assert_eq!(fan_rpm, 0);
         assert!(
             rows.iter()
                 .any(|(n, r)| n == "frekans.boost" && *r == "yok")
@@ -197,12 +219,51 @@ mod tests {
     }
 
     #[test]
-    fn add_dedupes_identical_pairs_only() {
+    fn add_dedupes_by_label() {
         let mut out = Vec::new();
         add(&mut out, "fan", "yok");
         add(&mut out, "fan", "yok");
         add(&mut out, "fan", "sysfs'de yok");
-        assert_eq!(out.len(), 2);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].1, "yok", "ilk eklenen neden korunmalı");
+    }
+
+    #[test]
+    fn capability_and_field_rows_merge_under_one_label() {
+        let mut app = App::sample();
+        app.capabilities = vec![Capabilities {
+            fields: vec![
+                ("hwmon.power", Metric::Unavailable("hwmon yok")),
+                ("fdinfo.vram_total", Metric::Unavailable("sysfs'de yok")),
+            ],
+        }];
+        app.last = Some(Snapshot::empty(Instant::now()));
+        let rows = missing(&app);
+        let power = rows.iter().filter(|(n, _)| n == "güç").count();
+        let vram_total = rows.iter().filter(|(n, _)| n == "VRAM toplamı").count();
+        assert_eq!(power, 1, "güç tek satır olmalı: {rows:?}");
+        assert_eq!(vram_total, 1, "VRAM toplamı tek satır olmalı: {rows:?}");
+        assert!(
+            !rows
+                .iter()
+                .any(|(n, _)| n == "power_w" || n == "vram_total" || n == "hwmon.power"),
+            "ham ad görünmemeli: {rows:?}"
+        );
+        assert!(
+            rows.iter()
+                .any(|(n, r)| n == "VRAM toplamı" && *r == "sysfs'de yok")
+        );
+    }
+
+    #[test]
+    fn no_panic_at_small_sizes() {
+        // 40x10 ve 20x4: örnekli, örneksiz ve eksik metrikli durumlar panik atmamalı.
+        for (w, h) in [(40, 10), (20, 4)] {
+            draw(&App::sample(), w, h);
+            let mut waiting = App::sample();
+            waiting.last = None;
+            draw(&waiting, w, h);
+        }
     }
 
     #[test]

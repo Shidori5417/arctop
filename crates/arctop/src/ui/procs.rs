@@ -221,6 +221,22 @@ mod tests {
     }
 
     #[test]
+    fn no_panic_at_small_sizes() {
+        // 40x10 ve 20x4: tablo, boş liste ve örneksiz durum panik atmamalı.
+        let sample = App::sample();
+        let waiting = empty_app();
+        for (w, h) in [(40, 10), (20, 4)] {
+            for sort in [SortKey::Busy, SortKey::Vram, SortKey::Pid, SortKey::Name] {
+                let mut app = App::sample();
+                app.sort = sort;
+                view_text(w, h, &app);
+            }
+            view_text(w, h, &sample);
+            view_text(w, h, &waiting);
+        }
+    }
+
+    #[test]
     fn no_panic_and_message_when_no_snapshot() {
         let mut app = empty_app();
         app.view = View::Procs;
