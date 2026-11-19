@@ -29,8 +29,8 @@ Atamalar önerilir; Opus `CLAUDE.md` karar ağacına göre değiştirebilir. �
 - [x] **Kullanıcı:** (Opus pty üzerinden gerçek kartta denedi: tüm görünümler, sıralama, F1, q) gerçek kartta elle dene, ekran görüntüsünü Opus'a anlat veya yapıştır
 
 ## Faz 4 — CLI ve çıktı
-- [ ] **T-014** `glm` — clap: `--interval`, `--card`, `--once`, `--json` (serde)
-- [ ] **T-015** `helper` — `--record out.csv`
+- [x] **T-014** `glm` — clap: `--interval`, `--card`, `--once`, `--json` (serde)
+- [x] **T-015** `helper` — `--record out.csv`
 
 ## Faz 5 — İleri (opsiyonel)
 - [ ] **T-016** `rust-coder` — `source/pmu.rs` (perf_event_open, yetki yoksa sessizce devre dışı); motor doluluğu için PMU fdinfo'ya tercih edilir
@@ -38,5 +38,5 @@ Atamalar önerilir; Opus `CLAUDE.md` karar ağacına göre değiştirebilir. �
 
 ## Faz 6 — Yayın
 - [ ] **T-018** `helper` — README (kurulum, ekran görüntüsü, "neden nvtop değil"), `vhs` tape ile GIF
-- [ ] **T-019** `helper` — GitHub Actions (fmt, clippy, test), release binary, AUR `PKGBUILD`
+- [x] **T-019** `helper` — GitHub Actions (fmt, clippy, test), release binary, AUR `PKGBUILD`
 - [ ] **T-020** `glm` (Hydrogen yerine) — bağımsız code review: yalnızca `docs/REVIEW.md` yazar, kodu değiştirmez; Opus bulguları kartlara dönüştürür
