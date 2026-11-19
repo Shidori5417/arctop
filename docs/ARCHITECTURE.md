@@ -47,7 +47,7 @@ pub trait MetricSource: Send {
 | `fdinfo` | `source/fdinfo.rs` | i915: `drm-engine-<sınıf>` ns · xe: `drm-cycles-<sınıf>` / `drm-total-cycles-<sınıf>` |
 | `pmu` | `source/pmu.rs` (Faz 5) | `perf_event_open`; yalnızca burada `unsafe` kullanılır |
 
-**fdinfo ayrıntıları:** Bir süreç aynı DRM istemcisini birden fazla fd ile tutabilir. Tekilleştirme `drm-client-id` ile yapılır. Doluluk = Δ(meşgul ns) / Δ(duvar saati ns), istemci başına hesaplanır. Önceki değerler `HashMap<(pid, client_id), Counters>` içinde tutulur, kaybolan süreçler temizlenir. Yalnızca hedef kartın `drm-pdev` değerine uyan istemciler sayılır.
+**fdinfo ayrıntıları:** Bir süreç aynı DRM istemcisini birden fazla fd ile tutabilir. Tekilleştirme `drm-client-id` ile yapılır. Doluluk = Δ(meşgul ns) / Δ(duvar saati ns), istemci başına hesaplanır. Önceki değerler `HashMap<(pdev, client_id), Counters>` içinde tutulur (ADR-011: paylaşılan istemci en küçük PID'e atanır), kaybolan süreçler temizlenir. Yalnızca hedef kartın `drm-pdev` değerine uyan istemciler sayılır.
 
 ## §4 Veri modeli (`core::model`)
 ```rust

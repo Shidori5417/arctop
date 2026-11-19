@@ -26,3 +26,9 @@ Geliştirme makinesinde xe yok. xe için ARCHITECTURE §3'teki beklenen yollar k
 
 ## ADR-009: `sample_once` probe çağırmaz
 `Sampler::spawn` probe'u kendisi çağırır; `sample_once` çağıran tarafın `probe` yapmasını bekler (`--once` uygulaması, T-014, bunu yapmalı).
+
+## ADR-010: `record.rs` için `std::fs` istisnası (REVIEW R-07)
+"Doğrudan `std::fs` yasak" kuralı **okuma** içindir (SysFs testlenebilirliği). `--record` kullanıcı dosyasına **yazar**; bu binary crate'te `record.rs` içinde `std::fs::File` kullanımı serbesttir. sysfs'e yazma yasağı (ADR-003) aynen geçerlidir.
+
+## ADR-011: fdinfo istemcileri global tekilleştirilir (REVIEW R-04)
+fork ile paylaşılan fd aynı `drm-client-id`'yi birden fazla PID'de gösterir (geliştirme makinesinde 8 PID'de görüldü). Sayaçlar `(drm-pdev, drm-client-id)` anahtarıyla bir kez sayılır; paylaşılan istemci en küçük PID'e atanır. ARCHITECTURE §3'teki `(pid, client_id)` anahtarının yerini alır.

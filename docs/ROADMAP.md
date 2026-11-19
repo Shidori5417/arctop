@@ -37,6 +37,11 @@ Atamalar önerilir; Opus `CLAUDE.md` karar ağacına göre değiştirebilir. �
 - [ ] **T-017** `glm` — birden fazla GPU (`c` ile kart değiştirme), iGPU + dGPU senaryosu
 
 ## Faz 6 — Yayın
-- [ ] **T-018** `helper` — README (kurulum, ekran görüntüsü, "neden nvtop değil"), `vhs` tape ile GIF
+- [x] **T-018** `helper` — README (kurulum, ekran görüntüsü, "neden nvtop değil"), `vhs` tape ile GIF
 - [x] **T-019** `helper` — GitHub Actions (fmt, clippy, test), release binary, AUR `PKGBUILD`
-- [ ] **T-020** `glm` (Hydrogen yerine) — bağımsız code review: yalnızca `docs/REVIEW.md` yazar, kodu değiştirmez; Opus bulguları kartlara dönüştürür
+- [x] **T-020** `glm` (Hydrogen yerine) — bağımsız code review: yalnızca `docs/REVIEW.md` yazar, kodu değiştirmez; Opus bulguları kartlara dönüştürür
+
+## Faz 6b — Review düzeltmeleri
+- [ ] **T-022** `rust-coder` — fdinfo: xe anahtar adları/kapasite, bellek Option, global client-id tekilleştirme, gerçek yol benchmark (R-01..R-05)
+- [ ] **T-023** `helper` — grafik başlığı, küçük terminal testleri, yardımda tekrar, JSON yuvarlama (R-08, R-09)
+- R-06 (hwmon xe label'ları) ve xe doğrulaması: xe donanımı bulunana kadar açık (ADR-007)
