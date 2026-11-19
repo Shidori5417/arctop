@@ -32,3 +32,6 @@ Geliştirme makinesinde xe yok. xe için ARCHITECTURE §3'teki beklenen yollar k
 
 ## ADR-011: fdinfo istemcileri global tekilleştirilir (REVIEW R-04)
 fork ile paylaşılan fd aynı `drm-client-id`'yi birden fazla PID'de gösterir (geliştirme makinesinde 8 PID'de görüldü). Sayaçlar `(drm-pdev, drm-client-id)` anahtarıyla bir kez sayılır; paylaşılan istemci en küçük PID'e atanır. ARCHITECTURE §3'teki `(pid, client_id)` anahtarının yerini alır.
+
+## ADR-012: fdinfo tarama önbelleği, `RESCAN_EVERY = 5` (T-024)
+DRM fd'si olmayan süreçler her 5 örnekte bir yeniden taranır; DRM süreçlerinde yalnızca bilinen fd'ler okunur. Canlı tarama 6–7 ms → ~2 ms. Bedel: GPU'yu sonradan açan eski bir süreç en geç 5 örnek sonra görünür. 8–10'a çıkarmak sentetik payı artırır ama gecikmeyi uzatır; gerek görülmedi.

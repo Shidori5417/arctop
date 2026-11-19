@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use arctop_core::source::fdinfo::FdinfoSource;
+use arctop_core::source::fdinfo::{FdinfoSource, RESCAN_EVERY};
 use arctop_core::{Device, Driver, EngineClass, Metric, MetricSource, Snapshot, SysFs};
 
 fn fixtures() -> PathBuf {
@@ -207,6 +207,7 @@ fn write_tree(root: &Path, n: u32, busy: u64, symlinks: bool) {
         );
         std::fs::write(dir.join("3"), &body).unwrap();
         std::fs::write(dir.join("4"), &body).unwrap();
+        std::fs::write(dir.join("5"), &body).unwrap();
         // DRM olmayan fd'lerin fdinfo'su okunmamalı (bozuk içerik, okunursa göz ardı edilir).
         std::fs::write(dir.join("6"), "pos:\t0\nflags:\t02\n").unwrap();
     }
@@ -224,7 +225,9 @@ fn bench_500(label: &str, symlinks: bool) {
     let mut src = FdinfoSource::new();
     let t = Instant::now();
     let mut out = Snapshot::empty(t);
+    let t_first = Instant::now();
     src.sample(&fs, &d, t, &mut out);
+    let first = t_first.elapsed();
     write_tree(&root, 500, 2_000_000, symlinks);
     // Kararlı durum: ilk örnek (sayaç ekleme) ölçüm dışı; 20 örnek ortalaması.
     let start = Instant::now();
@@ -234,7 +237,7 @@ fn bench_500(label: &str, symlinks: bool) {
     }
     let avg = start.elapsed() / RUNS;
     let _ = std::fs::remove_dir_all(&root);
-    println!("fdinfo bench [{label}] 500 süreç, ortalama {avg:?}");
+    println!("fdinfo bench [{label}] 500 süreç, ilk tarama {first:?}, kararlı ortalama {avg:?}");
     assert_eq!(out.procs.len(), 500);
     // Gerçek fd yolu sistem çağrısı bağımlıdır (T-022 raporu): hedef aşımı test başarısızlığı
     // yapılmaz, yalnızca bildirilir.
@@ -267,7 +270,9 @@ fn live_proc_sampling_average() {
     let mut src = FdinfoSource::new();
     let mut out = Snapshot::empty(Instant::now());
     let t = Instant::now();
-    src.sample(&fs, &d, t, &mut out); // ısınma
+    let t_first = Instant::now();
+    src.sample(&fs, &d, t, &mut out); // ilk tam tarama
+    let first = t_first.elapsed();
     let start = Instant::now();
     const RUNS: u32 = 20;
     for k in 1..=RUNS {
@@ -284,9 +289,12 @@ fn live_proc_sampling_average() {
         })
         .unwrap_or(0);
     println!(
-        "fdinfo canlı: {nproc} süreç, {} DRM satırı, ortalama {avg:?}",
+        "fdinfo canlı: {nproc} süreç, {} DRM satırı, ilk tarama {first:?}, ortalama {avg:?}",
         out.procs.len()
     );
+    if avg >= Duration::from_millis(5) {
+        println!("UYARI [canlı]: SPEC hedefi (< 5 ms) aşıldı");
+    }
 }
 
 #[test]
@@ -371,4 +379,121 @@ fn missing_memory_key_is_unavailable() {
     assert_eq!(o.procs.len(), 1);
     assert_eq!(o.vram_used, Metric::Unavailable("fdinfo'da yok"));
     assert_eq!(o.procs[0].vram_bytes, Metric::Unavailable("fdinfo'da yok"));
+}
+
+// ---- Önbellek doğruluk testleri (T-024) ----
+
+/// Geçici ağaçta tek süreç: `fd` dizininde bağlar, `fdinfo`'da içerik.
+struct Tree {
+    root: PathBuf,
+}
+
+impl Tree {
+    fn new(tag: &str) -> Self {
+        let root =
+            std::env::temp_dir().join(format!("arctop-fdcache-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("proc")).unwrap();
+        Tree { root }
+    }
+
+    fn proc_dir(&self, pid: u32) -> PathBuf {
+        self.root.join(format!("proc/{pid}"))
+    }
+
+    /// Süreci oluşturur (yoksa); `comm` yazar.
+    fn add_pid(&self, pid: u32) {
+        std::fs::create_dir_all(self.proc_dir(pid).join("fd")).unwrap();
+        std::fs::create_dir_all(self.proc_dir(pid).join("fdinfo")).unwrap();
+        std::fs::write(self.proc_dir(pid).join("comm"), "t\n").unwrap();
+    }
+
+    /// fd'yi `target`'a bağlar; `info` fdinfo içeriğidir (öncekini ezer).
+    fn set_fd(&self, pid: u32, fd: u32, target: &str, info: &str) {
+        let link = self.proc_dir(pid).join(format!("fd/{fd}"));
+        let _ = std::fs::remove_file(&link);
+        std::os::unix::fs::symlink(target, &link).unwrap();
+        std::fs::write(self.proc_dir(pid).join(format!("fdinfo/{fd}")), info).unwrap();
+    }
+
+    fn remove_pid(&self, pid: u32) {
+        std::fs::remove_dir_all(self.proc_dir(pid)).unwrap();
+    }
+}
+
+impl Drop for Tree {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+
+fn drm_info(client: u64, kib: u64) -> String {
+    format!(
+        "drm-driver:\ti915\ndrm-client-id:\t{client}\ndrm-pdev:\t0000:00:02.0\n\
+         drm-resident-local0:\t{kib} KiB\ndrm-engine-render:\t5 ns\n"
+    )
+}
+
+fn step(src: &mut FdinfoSource, fs: &SysFs, t: Instant, k: u64) -> Snapshot {
+    let mut o = Snapshot::empty(t);
+    src.sample(fs, &dev("0000:00:02.0"), t + Duration::from_secs(k), &mut o);
+    o
+}
+
+#[test]
+fn cache_rescan_finds_old_pid_that_opens_drm_later() {
+    let tree = Tree::new("late");
+    tree.add_pid(4242);
+    tree.set_fd(4242, 3, "socket:[1]", "pos:\t0\n");
+    let fs = SysFs::with_root(&tree.root);
+    let (mut src, t) = (FdinfoSource::new(), Instant::now());
+    assert!(step(&mut src, &fs, t, 0).procs.is_empty());
+    // Süreç sonradan GPU açar.
+    tree.set_fd(4242, 7, "/dev/dri/renderD128", &drm_info(1, 64));
+    let mut seen_at = None;
+    for k in 1..=u64::from(RESCAN_EVERY) {
+        if !step(&mut src, &fs, t, k).procs.is_empty() {
+            seen_at = Some(k);
+            break;
+        }
+    }
+    let k = seen_at.expect("RESCAN_EVERY örnek içinde görünmeli");
+    assert!(k >= 1);
+}
+
+#[test]
+fn cache_fd_reuse_falls_back_to_full_scan_immediately() {
+    let tree = Tree::new("reuse");
+    tree.add_pid(4243);
+    tree.set_fd(4243, 3, "/dev/dri/renderD128", &drm_info(1, 64));
+    let fs = SysFs::with_root(&tree.root);
+    let (mut src, t) = (FdinfoSource::new(), Instant::now());
+    let o = step(&mut src, &fs, t, 0);
+    assert_eq!(o.vram_used, Metric::Value(64 << 10));
+    // fd 3 başka bir şeye yeniden kullanılır; DRM istemcisi yeni fd 9'da. Tam tarama
+    // zamanı gelmeden (hemen ertesi örnekte) görünmeli.
+    tree.set_fd(4243, 3, "socket:[2]", "pos:\t0\n");
+    tree.set_fd(4243, 9, "/dev/dri/card1", &drm_info(2, 128));
+    let o = step(&mut src, &fs, t, 1);
+    assert_eq!(o.vram_used, Metric::Value(128 << 10));
+    assert_eq!(o.procs.len(), 1);
+}
+
+#[test]
+fn cache_vanished_pid_is_forgotten() {
+    let tree = Tree::new("gone");
+    tree.add_pid(4244);
+    tree.set_fd(4244, 3, "socket:[1]", "pos:\t0\n");
+    let fs = SysFs::with_root(&tree.root);
+    let (mut src, t) = (FdinfoSource::new(), Instant::now());
+    assert!(step(&mut src, &fs, t, 0).procs.is_empty());
+    tree.remove_pid(4244);
+    assert!(step(&mut src, &fs, t, 1).procs.is_empty());
+    // Aynı PID, bu kez DRM'li, yeni süreç olarak geri gelir: önbellek temizlendiği için
+    // tam tarama beklemeden görünür.
+    tree.add_pid(4244);
+    tree.set_fd(4244, 3, "/dev/dri/renderD128", &drm_info(3, 32));
+    let o = step(&mut src, &fs, t, 2);
+    assert_eq!(o.procs.len(), 1);
+    assert_eq!(o.vram_used, Metric::Value(32 << 10));
 }

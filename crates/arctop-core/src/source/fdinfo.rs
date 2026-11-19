@@ -29,6 +29,21 @@
 //! olur (0 değil). Süreç başına `vram_bytes` aynı kuraldadır.
 //! `vram_total` için i915'te sysfs girdisi yoktur (SYSFS-NOTES); bu kaynak onu `Unavailable("sysfs'de yok")` olarak işaretler.
 //!
+//! # Tarama önbelleği ve gecikme (SPEC: 500 süreçte < 5 ms)
+//! Baskın maliyet süreç başına `read_dir(/proc/N/fd)` + fd başına `readlink`'tir. Bu yüzden
+//! süreç başına bir önbellek tutulur ([`RESCAN_EVERY`] örnekte bir tam tarama):
+//! - DRM fd'si olmayan (ya da `fd` dizini okunamayan, ör. başka kullanıcının) süreçler
+//!   tam taramalar arasında hiç okunmaz.
+//! - DRM fd'si olan süreçlerde bilinen fd'lerin `fdinfo`'su her örnekte okunur; `fd` dizini
+//!   yalnızca tam taramada listelenir. Bilinen bir fd'nin `fdinfo`'su okunamazsa ya da artık
+//!   DRM değilse (fd kapandı/yeniden kullanıldı) süreç o örnekte hemen tam taramaya düşer.
+//! - Kaybolan süreçler önbellekten çıkar; aynı PID'nin yeniden belirmesi yeni süreç sayılır.
+//!
+//! Sonuçlar: GPU'yu sonradan açan eski bir süreç en geç `RESCAN_EVERY` örnek sonra görünür.
+//! PID yeniden kullanımı `/proc/N/stat` starttime ile doğrulanmaz; bir PID iki örnek arasında
+//! yeniden kullanılırsa (kaybolma görülmediyse) eski önbellek en fazla `RESCAN_EVERY` örnek
+//! geçerli kalır. İlk tam taramalar PID'ye göre kaydırılır (yük tek örnekte yığılmaz).
+//!
 //! # xe motor adları
 //! xe fdinfo'sunda motor anahtarları sınıf adı değil örnek adıdır
 //! (`rcs, bcs, vcs, vecs, ccs`; `other` yoksayılır). Bkz. [`xe_class_index`].
@@ -42,6 +57,9 @@ use crate::model::{
 };
 use crate::source::MetricSource;
 use crate::sysfs::SysFs;
+
+/// Önbellekteki bir sürecin tam taramaya (fd dizini listeleme) alınma aralığı (örnek sayısı).
+pub const RESCAN_EVERY: u32 = 5;
 
 /// Sabit çıktı sırası: `Render, Copy, Video, VideoEnhance, Compute`.
 const CLASSES: [EngineClass; 5] = [
@@ -274,9 +292,24 @@ fn mem_metric(v: Option<u64>) -> Metric<u64> {
     }
 }
 
+/// Bir sürecin tarama önbelleği.
+#[derive(Debug, Default)]
+struct PidCache {
+    /// Son tam taramada bulunan aday fdinfo yolları; boş = DRM fd'si yok / okunamadı.
+    paths: Vec<PathBuf>,
+    /// Bu örnek numarasından itibaren (dahil) tam tarama gerekir.
+    next_full: u64,
+    /// Süreci son gören örnek numarası (kaybolanları temizlemek için).
+    seen: u64,
+}
+
 /// fdinfo kaynağı: motor doluluğu, süreçler, VRAM kullanımı.
 #[derive(Debug, Default)]
 pub struct FdinfoSource {
+    /// Süreç başına tarama önbelleği (bkz. modül doc'u).
+    pids: HashMap<u32, PidCache>,
+    /// Örnek sayacı (1'den başlar; `sample` başında artar).
+    tick: u64,
     /// Önceki örnekteki sayaçlar; anahtar `(drm-pdev, drm-client-id)` (PID'siz, bkz. modül doc'u).
     prev: HashMap<ClientKey, Counters>,
     /// Bu örnekte görülenler; örnek sonunda `prev` ile yer değiştirir (kaybolanlar temizlenir).
@@ -285,6 +318,69 @@ pub struct FdinfoSource {
     prev_at: Option<Instant>,
     /// Cihazda en az bir kez görülen motor sınıfları.
     seen: [bool; N],
+}
+
+/// `paths` içindeki fdinfo dosyalarını okuyup `recs`/`owner`'a ekler.
+///
+/// Tümü okunabilir ve DRM ise `true`; biri okunamaz ya da DRM değilse (fd kapandı,
+/// yeniden kullanıldı, fixture'daki DRM-dışı dosya) `false` (okunabilenler yine eklenir;
+/// ardından tam tarama aynı istemcileri tekrar görürse tekilleştirme bunu tek sayar).
+fn ingest(
+    fs: &SysFs,
+    dev: &Device,
+    pid: u32,
+    paths: &[PathBuf],
+    recs: &mut Vec<Rec>,
+    owner: &mut HashMap<ClientKey, usize>,
+    mut kept: Option<&mut Vec<PathBuf>>,
+) -> bool {
+    let mut all_drm = true;
+    // `kept` istenirse aynı istemciyi gösteren yinelenen fd'ler (dup/fork) elenir: sayaçlar
+    // aynıdır, önbellekte biri yeter. Biri kapanırsa tam tarama diğerini bulur.
+    let mut clients: Vec<ClientKey> = Vec::new();
+    for path in paths {
+        // Erişilemeyen ya da biten fd sessizce atlanır.
+        let Ok(text) = fs.read_string(path) else {
+            all_drm = false;
+            continue;
+        };
+        let Some(info) = parse_fdinfo(&text) else {
+            all_drm = false;
+            continue;
+        };
+        let key = (info.pdev.unwrap_or("").to_string(), info.client_id);
+        if let Some(k) = kept.as_deref_mut()
+            && !clients.contains(&key)
+        {
+            clients.push(key.clone());
+            k.push(path.clone());
+        }
+        if !dev.pci_slot.is_empty() && info.pdev != Some(dev.pci_slot.as_str()) {
+            continue;
+        }
+        match owner.get(&key) {
+            // Aynı süreçte ya da daha küçük PID'de zaten var: tek sayılır.
+            Some(&idx) if recs[idx].pid <= pid => {}
+            found => {
+                let rec = Rec {
+                    pid,
+                    key: key.clone(),
+                    cur: Counters::of(&info),
+                    driver: info.driver,
+                    capacity: info.capacity,
+                    resident: info.resident,
+                };
+                match found {
+                    Some(&idx) => recs[idx] = rec,
+                    None => {
+                        owner.insert(key, recs.len());
+                        recs.push(rec);
+                    }
+                }
+            }
+        }
+    }
+    all_drm
 }
 
 impl FdinfoSource {
@@ -342,6 +438,13 @@ impl FdinfoSource {
     }
 
     #[cfg(test)]
+    fn cached_pids(&self) -> Vec<u32> {
+        let mut v: Vec<u32> = self.pids.keys().copied().collect();
+        v.sort_unstable();
+        v
+    }
+
+    #[cfg(test)]
     fn tracked_clients(&self) -> usize {
         self.prev.len()
     }
@@ -377,11 +480,14 @@ impl MetricSource for FdinfoSource {
             .and_then(|p| now.checked_duration_since(p))
             .map(|d| d.as_nanos() as f64);
         self.next.clear();
+        self.tick += 1;
+        let tick = self.tick;
 
         let mut tot_pct = [0.0f64; N];
         let mut tot_vram: Option<u64> = None;
         let mut procs = Vec::new();
         let mut paths = Vec::new();
+        let mut kept = Vec::new();
         // Aşama 1: tüm PID'lerden istemcileri topla; her `(pdev, client_id)` en küçük PID'e
         // atanır (PID sırası dizin sırasından bağımsızdır).
         let mut recs: Vec<Rec> = Vec::new();
@@ -395,40 +501,50 @@ impl MetricSource for FdinfoSource {
             else {
                 continue;
             };
-            if !Self::candidate_paths(fs, pid, &mut paths) {
-                continue;
+            // Önbellek: tam tarama zamanı gelmediyse bilinen yolları oku. Yeni süreç ya da
+            // bilinen fd bozulduysa aşağıda tam taramaya düşülür.
+            let cache = self.pids.entry(pid).or_insert_with(|| PidCache {
+                // Yeni süreç: hemen tam tarama; sonraki tam tarama PID'ye göre kaydırılır.
+                next_full: 0,
+                ..PidCache::default()
+            });
+            let first = cache.seen == 0 && cache.next_full == 0;
+            cache.seen = tick;
+            if tick < cache.next_full {
+                if cache.paths.is_empty() {
+                    continue;
+                }
+                let known = std::mem::take(&mut cache.paths);
+                let ok = ingest(fs, dev, pid, &known, &mut recs, &mut owner, None);
+                // `cache` ödünç alımı `ingest` boyunca bitti; yeniden al.
+                if let Some(c) = self.pids.get_mut(&pid) {
+                    c.paths = known;
+                }
+                if ok {
+                    continue;
+                }
             }
-            for path in &paths {
-                // Erişilemeyen ya da biten fd sessizce atlanır.
-                let Ok(text) = fs.read_string(path) else {
-                    continue;
-                };
-                let Some(info) = parse_fdinfo(&text) else {
-                    continue;
-                };
-                if !dev.pci_slot.is_empty() && info.pdev != Some(dev.pci_slot.as_str()) {
-                    continue;
+            let found = Self::candidate_paths(fs, pid, &mut paths);
+            if found {
+                kept.clear();
+                ingest(fs, dev, pid, &paths, &mut recs, &mut owner, Some(&mut kept));
+                // DRM-dışı (fixture) dosyalar `kept`'e girmez; hepsi DRM-dışıysa boş kalır.
+            }
+            if let Some(c) = self.pids.get_mut(&pid) {
+                c.paths.clear();
+                if found {
+                    c.paths.append(&mut kept);
                 }
-                let key = (info.pdev.unwrap_or("").to_string(), info.client_id);
-                let rec = Rec {
-                    pid,
-                    key: key.clone(),
-                    cur: Counters::of(&info),
-                    driver: info.driver,
-                    capacity: info.capacity,
-                    resident: info.resident,
+                let wait = if first {
+                    1 + u64::from(pid % RESCAN_EVERY)
+                } else {
+                    u64::from(RESCAN_EVERY)
                 };
-                match owner.get(&key) {
-                    // Aynı süreçte ya da daha küçük PID'de zaten var: tek sayılır.
-                    Some(&idx) if recs[idx].pid <= pid => {}
-                    Some(&idx) => recs[idx] = rec,
-                    None => {
-                        owner.insert(key, recs.len());
-                        recs.push(rec);
-                    }
-                }
+                c.next_full = tick + wait;
             }
         }
+        // Kaybolan süreçler önbellekten çıkar.
+        self.pids.retain(|_, c| c.seen == tick);
 
         // Aşama 2: PID'e göre grupla, Δ hesapla.
         recs.sort_by_key(|r| r.pid);
@@ -659,5 +775,9 @@ mod tests {
         let k = |id| ("0000:00:02.0".to_string(), id);
         assert!(!s.prev.contains_key(&k(4)));
         assert!(s.prev.contains_key(&k(9)));
+        // Kaybolan süreç (400) önbellekten de çıkar, yenisi (600) girer.
+        let pids = s.cached_pids();
+        assert!(!pids.contains(&400));
+        assert!(pids.contains(&600));
     }
 }
