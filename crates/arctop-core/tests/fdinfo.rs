@@ -137,18 +137,35 @@ fn real_a750_t0_to_t1_does_not_panic() {
     let p = out.procs.iter().find(|p| p.pid == 1815).expect("pid 1815");
     assert_eq!(p.comm, "Hyprland");
     assert!(matches!(out.vram_used, Metric::Value(_)));
+    assert_eq!(out.vram_total, Metric::Unavailable("sysfs'de yok"));
 }
 
 #[test]
-fn probe_reports_three_fields() {
+fn probe_reports_four_fields() {
     let mut src = FdinfoSource::new();
     let caps = src.probe(&SysFs::with_root(fixtures().join("a750/t0")), &dev(""));
     let names: Vec<&str> = caps.fields.iter().map(|(n, _)| *n).collect();
     assert_eq!(
         names,
-        ["fdinfo.engines", "fdinfo.procs", "fdinfo.vram_used"]
+        [
+            "fdinfo.engines",
+            "fdinfo.procs",
+            "fdinfo.vram_used",
+            "fdinfo.vram_total"
+        ]
     );
-    assert!(caps.fields.iter().all(|(_, m)| m.is_available()));
+    // vram_total i915'te sysfs'de olmadığı için her zaman Unavailable.
+    assert!(caps
+        .fields
+        .iter()
+        .filter(|(n, _)| *n != "fdinfo.vram_total")
+        .all(|(_, m)| m.is_available()));
+    let total = caps
+        .fields
+        .iter()
+        .find(|(n, _)| *n == "fdinfo.vram_total")
+        .map(|(_, m)| m.clone());
+    assert_eq!(total, Some(Metric::Unavailable("sysfs'de yok")));
     let caps = src.probe(&SysFs::with_root("/nonexistent-arctop-root"), &dev(""));
     assert!(caps.fields.iter().all(|(_, m)| !m.is_available()));
 }

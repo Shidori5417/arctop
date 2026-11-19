@@ -16,7 +16,7 @@
 //! # VRAM
 //! `vram_used`, tüm istemcilerin `drm-resident-local0` toplamıdır. Süreçler arasında
 //! paylaşılan tamponlar birden çok istemcide görünebileceğinden çift sayılabilir.
-//! `vram_total` bu kaynağın işi değildir.
+//! `vram_total` için i915'te sysfs girdisi yoktur (SYSFS-NOTES); bu kaynak onu `Unavailable("sysfs'de yok")` olarak işaretler.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -276,6 +276,7 @@ impl MetricSource for FdinfoSource {
                 ("fdinfo.engines", m.clone()),
                 ("fdinfo.procs", m.clone()),
                 ("fdinfo.vram_used", m),
+                ("fdinfo.vram_total", Metric::Unavailable("sysfs'de yok")),
             ],
         }
     }
@@ -388,6 +389,7 @@ impl MetricSource for FdinfoSource {
         procs.sort_by_key(|p| p.pid);
         out.procs = procs;
         out.vram_used = Metric::Value(tot_vram);
+        out.vram_total = Metric::Unavailable("sysfs'de yok");
         out.engines = if wall_ns.is_some() {
             (0..N)
                 .filter(|&i| self.seen[i])
