@@ -1,0 +1,5 @@
+drm-driver:	i915
+drm-client-id:	6
+drm-pdev:	0000:00:02.0
+drm-resident-local0:	3072 KiB
+drm-engine-render:	250000000 ns
