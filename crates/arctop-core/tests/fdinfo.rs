@@ -155,11 +155,12 @@ fn probe_reports_four_fields() {
         ]
     );
     // vram_total i915'te sysfs'de olmadığı için her zaman Unavailable.
-    assert!(caps
-        .fields
-        .iter()
-        .filter(|(n, _)| *n != "fdinfo.vram_total")
-        .all(|(_, m)| m.is_available()));
+    assert!(
+        caps.fields
+            .iter()
+            .filter(|(n, _)| *n != "fdinfo.vram_total")
+            .all(|(_, m)| m.is_available())
+    );
     let total = caps
         .fields
         .iter()
