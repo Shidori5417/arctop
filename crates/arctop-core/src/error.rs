@@ -1,0 +1,1 @@
+//! Kütüphane hata tipleri (`thiserror`).
