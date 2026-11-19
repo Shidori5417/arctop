@@ -12,7 +12,7 @@
 ## Beklenenler (xe)
 - Frekans: `device/tile0/gt0/freq0/{act,cur,min,max,rp0,rpn}_freq`
 - hwmon: `name` = `xe`, `temp*_input` ve `energy*_input` (çip/paket ayrımı `*_label` ile)
-- fdinfo: `drm-cycles-<sınıf>` ve `drm-total-cycles-<sınıf>` (doluluk = Δcycles / Δtotal_cycles)
+- fdinfo (docs.kernel.org "Xe DRM usage stats"; donanımda doğrulanmadı): motor anahtarları **örnek adıdır**: `drm-cycles-{rcs,bcs,vcs,vecs,ccs,other}`, `drm-total-cycles-<ad>`, `drm-engine-capacity-<ad>`; doluluk = Δcycles / (Δtotal_cycles × capacity). Bellek: `drm-resident-{system,gtt,vram0,stolen}` (VRAM = `vram0`)
 
 ## Doğrulanmış değerler
 Kaynak: `docs/hw/a750.txt` (2026-11-19 05:32). Sayısal örnekler bu dosyadan; t0/t1 farkı `tests/fixtures/a750/` (canlı, 2 sn arayla).

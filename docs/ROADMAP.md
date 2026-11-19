@@ -42,6 +42,7 @@ Atamalar önerilir; Opus `CLAUDE.md` karar ağacına göre değiştirebilir. �
 - [x] **T-020** `glm` (Hydrogen yerine) — bağımsız code review: yalnızca `docs/REVIEW.md` yazar, kodu değiştirmez; Opus bulguları kartlara dönüştürür
 
 ## Faz 6b — Review düzeltmeleri
-- [ ] **T-022** `rust-coder` — fdinfo: xe anahtar adları/kapasite, bellek Option, global client-id tekilleştirme, gerçek yol benchmark (R-01..R-05)
-- [ ] **T-023** `helper` — grafik başlığı, küçük terminal testleri, yardımda tekrar, JSON yuvarlama (R-08, R-09)
+- [x] **T-022** `rust-coder` — fdinfo: xe anahtar adları/kapasite, bellek Option, global client-id tekilleştirme, gerçek yol benchmark (R-01..R-05)
+- [x] **T-023** `helper` — grafik başlığı, küçük terminal testleri, yardımda tekrar, JSON yuvarlama (R-08, R-09)
+- [ ] **T-024** `rust-coder` — fdinfo taramasını 5 ms altına indir (canlı: 6-7 ms, 347 süreç)
 - R-06 (hwmon xe label'ları) ve xe doğrulaması: xe donanımı bulunana kadar açık (ADR-007)
