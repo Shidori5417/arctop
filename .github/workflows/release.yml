@@ -1,0 +1,37 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build release binary
+        run: cargo build --release --locked -p arctop
+      - name: Package
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          NAME="arctop-${TAG}-x86_64-linux"
+          STAGE="$(mktemp -d)"
+          cp target/release/arctop "$STAGE/"
+          cp README.md LICENSE-* "$STAGE/"
+          tar -czf "$NAME.tar.gz" -C "$STAGE" .
+          sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256"
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            arctop-${{ github.ref_name }}-x86_64-linux.tar.gz
+            arctop-${{ github.ref_name }}-x86_64-linux.tar.gz.sha256

@@ -1,0 +1,14 @@
+pkgbase = arctop
+	pkgdesc = Terminal live monitor for Intel Arc GPUs
+	pkgver = 0.1.0
+	pkgrel = 1
+	url = https://github.com/Shidori5417/arctop
+	arch = x86_64
+	license = MIT
+	license = Apache-2.0
+	makedepends = cargo
+	depends = gcc-libs
+	source = arctop-0.1.0.tar.gz::https://github.com/Shidori5417/arctop/archive/v0.1.0.tar.gz
+	sha256sums = SKIP
+
+pkgname = arctop

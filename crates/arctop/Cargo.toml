@@ -3,6 +3,11 @@ name = "arctop"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Terminal live monitor for Intel Arc GPUs"
+repository = "https://github.com/Shidori5417/arctop"
+readme = "../../README.md"
+keywords = ["intel", "arc", "gpu", "monitor", "tui"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 anyhow.workspace = true
