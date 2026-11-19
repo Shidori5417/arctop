@@ -39,4 +39,4 @@ Atamalar önerilir; Opus `CLAUDE.md` karar ağacına göre değiştirebilir. �
 ## Faz 6 — Yayın
 - [ ] **T-018** `helper` — README (kurulum, ekran görüntüsü, "neden nvtop değil"), `vhs` tape ile GIF
 - [ ] **T-019** `helper` — GitHub Actions (fmt, clippy, test), release binary, AUR `PKGBUILD`
-- [ ] **T-020** `hydrogen` — bağımsız code review: yalnızca `docs/REVIEW.md` yazar, kodu değiştirmez; Opus bulguları kartlara dönüştürür
+- [ ] **T-020** `glm` (Hydrogen yerine) — bağımsız code review: yalnızca `docs/REVIEW.md` yazar, kodu değiştirmez; Opus bulguları kartlara dönüştürür
