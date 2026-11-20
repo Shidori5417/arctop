@@ -35,3 +35,6 @@ fork ile paylaşılan fd aynı `drm-client-id`'yi birden fazla PID'de gösterir 
 
 ## ADR-012: fdinfo tarama önbelleği, `RESCAN_EVERY = 5` (T-024)
 DRM fd'si olmayan süreçler her 5 örnekte bir yeniden taranır; DRM süreçlerinde yalnızca bilinen fd'ler okunur. Canlı tarama 6–7 ms → ~2 ms. Bedel: GPU'yu sonradan açan eski bir süreç en geç 5 örnek sonra görünür. 8–10'a çıkarmak sentetik payı artırır ama gecikmeyi uzatır; gerek görülmedi.
+
+## ADR-013: TUI v2 tasarım dili (docs/TUI-DESIGN.md)
+Rounded paneller, semantik renk tokenları (`theme::Tok`), truecolor/256/NO_COLOR modları, modal yardım, süreç tablosunda PID'e bağlı seçim. Görünüm dosyalarında doğrudan `Color::` kullanımı yasak; tüm stil `theme` ve `ui::widgets` üzerinden. Bu fazda yalnızca Claude Sonnet (`rust-coder`) ve Haiku (`helper`) kullanılır (kullanıcı isteği).

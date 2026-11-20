@@ -46,3 +46,11 @@ Atamalar önerilir; Opus `CLAUDE.md` karar ağacına göre değiştirebilir. �
 - [x] **T-023** `helper` — grafik başlığı, küçük terminal testleri, yardımda tekrar, JSON yuvarlama (R-08, R-09)
 - [x] **T-024** `rust-coder` — fdinfo taramasını 5 ms altına indir (canlı: 6-7 ms, 347 süreç)
 - R-06 (hwmon xe label'ları) ve xe doğrulaması: xe donanımı bulunana kadar açık (ADR-007)
+
+## Faz 7 — TUI v2 (modernleştirme; yalnızca Sonnet/Haiku)
+- [ ] **T-025** 🔒 `rust-coder` — palet, `ui::widgets`, başlık/altbilgi, modal yardım çerçevesi, App seçim/canlılık durumu
+- [ ] **T-026** `rust-coder` — Özet: stat kartları + sparkline, motorlar, en çok kullananlar
+- [ ] **T-027** `rust-coder` — Grafikler: metrik renkleri, birimli eksenler, zaman etiketleri, min/ort/maks
+- [ ] **T-028** `rust-coder` — Süreçler: seçim, kaydırma çubuğu, GPU mini çubuğu, duyarlı sütunlar
+- [ ] **T-029** `helper` — Yardım modal içeriği
+- [ ] **T-030** `helper` — README ekran görüntüleri, son kontrol
