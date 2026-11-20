@@ -1,82 +1,149 @@
-//! Süreç görünümü: GPU kullanan süreçler tablosu, filtre ve sıralama durumu (§6).
+//! Süreç görünümü v2: GPU kullanan süreçler tablosu, seçim, filtre ve sıralama (TUI-DESIGN §6).
 
 use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Cell, Paragraph, Row, Table};
+use ratatui::layout::{Constraint, Rect};
+use ratatui::style::Style;
+use ratatui::text::{Line, Span, Text};
+use ratatui::widgets::{
+    Cell, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table, TableState,
+};
 
 use arctop_core::{EngineClass, Metric, ProcUsage};
 
 use crate::app::{App, SortKey};
 use crate::fmt;
 use crate::ui::theme::{self, Tok};
+use crate::ui::widgets;
 
-/// Tablodaki motor sütunlarının sırası (Render..Compute grubu).
-const ENGINE_COLUMNS: [EngineClass; 5] = [
-    EngineClass::Render,
-    EngineClass::Copy,
-    EngineClass::Video,
-    EngineClass::VideoEnhance,
-    EngineClass::Compute,
+/// Tablodaki motor sütunlarının sırası (geniş düzende gösterilir).
+const ENGINE_COLUMNS: [(&str, EngineClass); 5] = [
+    ("Render", EngineClass::Render),
+    ("Copy", EngineClass::Copy),
+    ("Video", EngineClass::Video),
+    ("VE", EngineClass::VideoEnhance),
+    ("Compute", EngineClass::Compute),
 ];
 
-/// Görünümü `area` içine çizer: süreç tablosu ve altta filtre/sayı satırı.
+/// Bu genişliğin (dış alan) altında motor sütunları gizlenir.
+const WIDE_MIN: u16 = 90;
+/// GPU sütunundaki mini çubuk genişliği.
+const GPU_BAR: u16 = 10;
+/// GPU sütunu genişliği: çubuk + boşluk + `100.0%`.
+const GPU_W: u16 = GPU_BAR + 1 + 6;
+
+/// Görünümü `area` içine çizer: tek panel içinde süreç tablosu.
 ///
 /// Satır sırası `App::visible_procs` tarafından belirlenir (filtre + sıralama
-/// orada yapılmıştır); burada yeniden sıralama yapılmaz.
+/// orada yapılmıştır); burada yeniden sıralanmaz. Seçim `App::selected_index`
+/// ile gelir. Salt okunur çizim: kilit ya da iptal noktası yoktur.
 pub fn render(f: &mut Frame, area: Rect, app: &App) {
-    let [body, status] = Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(area);
-
     let procs = app.visible_procs();
     let total = app.last.as_ref().map_or(0, |s| s.procs.len());
+    let count = Line::from(Span::styled(
+        format!(" {} / {} ", procs.len(), total),
+        theme::fg(Tok::Muted),
+    ));
+    let block = widgets::panel_with("Süreçler", count).title_bottom(filter_line(app));
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
     if app.last.is_none() {
-        render_message(f, body, "örnek bekleniyor…");
+        render_message(f, inner, "örnek bekleniyor…");
     } else if procs.is_empty() {
-        render_message(f, body, "okunabilen DRM istemcisi yok");
+        render_message(f, inner, "okunabilen DRM istemcisi yok");
     } else {
-        render_table(f, body, app, &procs);
+        render_table(f, inner, area.width >= WIDE_MIN, app, &procs);
     }
-    render_status(f, status, app, procs.len(), total);
 }
 
-/// Gövde alanına soluk tek satır bilgi iletisi yazar.
+/// Alt kenarlık başlığı: filtre aktifse (düzenleniyor ya da dolu) Accent, değilse Muted ipucu.
+fn filter_line(app: &App) -> Line<'static> {
+    if app.filter_editing {
+        Line::from(Span::styled(
+            format!(" / {}_ ", app.filter),
+            theme::fg(Tok::Accent),
+        ))
+    } else if app.filter.is_empty() {
+        Line::from(Span::styled(" / ile filtrele ", theme::fg(Tok::Muted)))
+    } else {
+        Line::from(Span::styled(
+            format!(" / {} ", app.filter),
+            theme::fg(Tok::Accent),
+        ))
+    }
+}
+
+/// Gövde alanının ortasına soluk tek satır bilgi iletisi yazar.
 fn render_message(f: &mut Frame, area: Rect, msg: &str) {
-    f.render_widget(Paragraph::new(msg).style(theme::fg(Tok::Muted)), area);
+    let line = widgets::centered(area, area.width, 1);
+    f.render_widget(widgets::empty_state(msg), line);
 }
 
-/// Tabloyu çizer; başlıkta aktif sıralama vurgulu, satırlar `procs` sırasıyla.
-fn render_table(f: &mut Frame, area: Rect, app: &App, procs: &[&ProcUsage]) {
-    let is_pid = app.sort == SortKey::Pid;
-    let is_name = app.sort == SortKey::Name;
-    let is_vram = app.sort == SortKey::Vram;
-    let busy = app.sort == SortKey::Busy;
+/// Tabloyu çizer; başlıkta aktif sıralama vurgulu, taşma varsa sağda kaydırma çubuğu.
+fn render_table(f: &mut Frame, area: Rect, wide: bool, app: &App, procs: &[&ProcUsage]) {
     let mark = sort_arrow(app.sort);
-    // Busy sıralaması motor sınıflarının en yükseğine göredir: grup vurgulanır,
-    // yön oku grubun son sütununda (Compute) gösterilir.
-    let header = Row::new(vec![
-        header_cell("PID", is_pid, if is_pid { mark } else { "" }),
-        header_cell("Ad", is_name, if is_name { mark } else { "" }),
-        header_cell("Render", busy, ""),
-        header_cell("Copy", busy, ""),
-        header_cell("Video", busy, ""),
-        header_cell("VE", busy, ""),
-        header_cell("Compute", busy, if busy { mark } else { "" }),
-        header_cell("VRAM", is_vram, if is_vram { mark } else { "" }),
-    ]);
-    // 80 sütunlu terminalde Ad'a 24 karakter kalacak sabit genişlikler.
-    let widths = [
-        Constraint::Length(7), // PID
-        Constraint::Min(4),    // Ad (kalan genişlik)
-        Constraint::Length(7), // Render
-        Constraint::Length(6), // Copy
-        Constraint::Length(6), // Video
-        Constraint::Length(6), // VE
-        Constraint::Length(9), // Compute (Busy oku)
-        Constraint::Length(8), // VRAM
+    let on = |k: SortKey| app.sort == k;
+    let mut head = vec![
+        header_cell("PID", on(SortKey::Pid), mark, true),
+        header_cell("Ad", on(SortKey::Name), mark, false),
+        // Busy sıralaması en yüksek motor yüzdesine göredir: GPU sütunu.
+        header_cell("GPU", on(SortKey::Busy), mark, false),
     ];
-    let rows = procs.iter().map(|p| proc_row(p));
-    let table = Table::new(rows, widths).header(header).column_spacing(1);
-    f.render_widget(table, area);
+    let mut widths = vec![
+        Constraint::Length(7),
+        Constraint::Min(12),
+        Constraint::Length(GPU_W),
+    ];
+    if wide {
+        for (name, _) in ENGINE_COLUMNS {
+            head.push(header_cell(name, false, mark, true));
+            widths.push(Constraint::Length(7));
+        }
+    }
+    head.push(header_cell("VRAM", on(SortKey::Vram), mark, true));
+    widths.push(Constraint::Length(9));
+    let header = Row::new(head).style(theme::bold(Tok::Muted).bg(theme::color(Tok::Surface)));
+
+    let rows: Vec<Row> = procs
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let row = proc_row(p, wide);
+            if i % 2 == 1 {
+                row.style(Style::default().bg(theme::color(Tok::RowAlt)))
+            } else {
+                row
+            }
+        })
+        .collect();
+    let table = Table::new(rows, widths)
+        .header(header)
+        .column_spacing(1)
+        .row_highlight_style(theme::selected());
+    let mut state = TableState::default().with_selected(app.selected_index());
+    f.render_stateful_widget(table, area, &mut state);
+
+    let visible = usize::from(area.height.saturating_sub(1));
+    if procs.len() > visible && visible > 0 {
+        let mut sb = ScrollbarState::new(procs.len().saturating_sub(visible))
+            .viewport_content_length(visible)
+            .position(state.offset());
+        let bar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None)
+            .track_symbol(Some("│"))
+            .thumb_symbol("┃")
+            .track_style(theme::fg(Tok::Surface))
+            .thumb_style(theme::fg(Tok::Accent));
+        // Başlık satırının altından başlar; sağ iç boşluk sütununa oturur.
+        let sb_area = Rect {
+            x: area.x,
+            y: area.y + 1,
+            width: area.width + 1,
+            height: area.height - 1,
+        };
+        f.render_stateful_widget(bar, sb_area, &mut sb);
+    }
 }
 
 /// Aktif sıralamanın yön oku: azalan ▼, artan ▲.
@@ -87,70 +154,80 @@ fn sort_arrow(sort: SortKey) -> &'static str {
     }
 }
 
-/// Başlık hücresi: vurguluysa Arc mavisi, değilse gri; `mark` boş değilse ok.
-fn header_cell(base: &str, active: bool, mark: &str) -> Cell<'static> {
-    let text = if mark.is_empty() {
-        base.to_owned()
-    } else {
+/// Başlık hücresi: aktifse Accent + bold ve `mark` oku; değilse (satır stilinden) soluk.
+fn header_cell(base: &str, active: bool, mark: &str, right: bool) -> Cell<'static> {
+    let text = if active {
         format!("{base} {mark}")
+    } else {
+        base.to_owned()
     };
     let style = if active {
         theme::bold(Tok::Accent)
     } else {
-        theme::fg(Tok::Muted)
+        theme::bold(Tok::Muted)
     };
-    Cell::from(Span::styled(text, style))
+    aligned(Line::from(Span::styled(text, style)), right)
 }
 
-/// Bir süreç satırı: PID, Ad, motor dolulukları ve VRAM.
-fn proc_row(p: &ProcUsage) -> Row<'static> {
-    let mut cells = vec![Cell::from(p.pid.to_string()), Cell::from(p.comm.clone())];
-    cells.extend(ENGINE_COLUMNS.iter().map(|&class| engine_cell(p, class)));
+/// Hücre metnini isteğe bağlı sağa hizalar.
+fn aligned(line: Line<'static>, right: bool) -> Cell<'static> {
+    let text = Text::from(line);
+    Cell::from(if right { text.right_aligned() } else { text })
+}
+
+/// Bir süreç satırı: PID, Ad, GPU çubuğu, (geniş düzende) motorlar ve VRAM.
+fn proc_row(p: &ProcUsage, wide: bool) -> Row<'static> {
+    let mut cells = vec![
+        aligned(Line::from(p.pid.to_string()), true),
+        Cell::from(p.comm.clone()),
+        gpu_cell(p),
+    ];
+    if wide {
+        cells.extend(
+            ENGINE_COLUMNS
+                .iter()
+                .map(|&(_, class)| engine_cell(p, class)),
+        );
+    }
     cells.push(vram_cell(p));
     Row::new(cells)
 }
 
-/// Sürecin `class` motorundaki doluluk; o sınıf yoksa soluk `DASH`.
-fn engine_cell(p: &ProcUsage, class: EngineClass) -> Cell<'static> {
-    match p.engines.iter().find(|e| e.class == class) {
-        Some(e) => Cell::from(fmt::pct(e.busy_pct)),
-        None => Cell::from(Span::styled(fmt::DASH, theme::fg(Tok::Muted))),
-    }
-}
-
-/// Sürecin VRAM kullanımı; okunamıyorsa soluk `DASH`.
-fn vram_cell(p: &ProcUsage) -> Cell<'static> {
-    match &p.vram_bytes {
-        Metric::Value(b) => Cell::from(fmt::bytes(*b)),
-        Metric::Unavailable(_) => Cell::from(Span::styled(fmt::DASH, theme::fg(Tok::Muted))),
-    }
-}
-
-/// Alt satır: solda filtre durumu, sağda `görünen / toplam` süreç sayısı.
-fn render_status(f: &mut Frame, area: Rect, app: &App, visible: usize, total: usize) {
-    let count = format!("{visible} / {total}");
-    let count_w = count.chars().count() as u16;
-    let [filter_area, count_area] =
-        Layout::horizontal([Constraint::Min(0), Constraint::Length(count_w)]).areas(area);
-    f.render_widget(Paragraph::new(Line::from(filter_spans(app))), filter_area);
-    f.render_widget(Paragraph::new(count), count_area);
-}
-
-/// Filtre satırı içerikleri: düzenleniyorsa imleçli filtre, boşsa soluk ipucu.
-fn filter_spans(app: &App) -> Vec<Span<'static>> {
-    if app.filter_editing {
-        vec![
-            Span::styled("/", theme::bold(Tok::Accent)),
-            Span::raw(format!(" {}_", app.filter)),
-        ]
-    } else if app.filter.is_empty() {
-        vec![Span::styled("/ ile filtrele", theme::fg(Tok::Muted))]
+/// Yüzde metni sağa hizalı `width` karakter; 0.0 → soluk `·`.
+fn pct_span(pct: f32, width: usize) -> Span<'static> {
+    if pct <= 0.0 {
+        Span::styled(format!("{:>width$}", "·"), theme::fg(Tok::Muted))
     } else {
-        vec![
-            Span::styled("/", theme::bold(Tok::Accent)),
-            Span::raw(format!(" {}", app.filter)),
-        ]
+        Span::raw(format!("{:>width$}", fmt::pct(pct)))
     }
+}
+
+/// GPU sütunu: en yüksek motor yüzdesinin yük renkli çubuğu + yüzde.
+fn gpu_cell(p: &ProcUsage) -> Cell<'static> {
+    let max = p.engines.iter().map(|e| e.busy_pct).fold(0.0_f32, f32::max);
+    let mut line = widgets::hbar(max, GPU_BAR, theme::load_color(max));
+    line.spans.push(Span::raw(" "));
+    line.spans.push(pct_span(max, 6));
+    Cell::from(line)
+}
+
+/// Sürecin `class` motorundaki doluluk (sağa hizalı); yok ya da 0.0 ise soluk `·`.
+fn engine_cell(p: &ProcUsage, class: EngineClass) -> Cell<'static> {
+    let pct = p
+        .engines
+        .iter()
+        .find(|e| e.class == class)
+        .map_or(0.0, |e| e.busy_pct);
+    aligned(Line::from(pct_span(pct, 7)), true)
+}
+
+/// Sürecin VRAM kullanımı (sağa hizalı); okunamıyorsa soluk `DASH`.
+fn vram_cell(p: &ProcUsage) -> Cell<'static> {
+    let span = match &p.vram_bytes {
+        Metric::Value(b) => Span::raw(fmt::bytes(*b)),
+        Metric::Unavailable(_) => Span::styled(fmt::DASH, theme::fg(Tok::Muted)),
+    };
+    aligned(Line::from(span), true)
 }
 
 #[cfg(test)]
@@ -275,7 +352,7 @@ mod tests {
     fn sort_marks_in_header() {
         let mut app = App::sample();
         for (sort, want) in [
-            (SortKey::Busy, "Compute ▼"),
+            (SortKey::Busy, "GPU ▼"),
             (SortKey::Vram, "VRAM ▼"),
             (SortKey::Pid, "PID ▲"),
             (SortKey::Name, "Ad ▲"),
@@ -286,18 +363,98 @@ mod tests {
         }
     }
 
+    /// Başlık satırında (y=1) `needle`'ın başladığı sütun.
+    fn header_col(t: &Terminal<TestBackend>, needle: &str) -> u16 {
+        let b = t.backend().buffer();
+        let row: Vec<&str> = (0..b.area.width).map(|x| b[(x, 1)].symbol()).collect();
+        let hay: String = row.concat();
+        let byte = hay.find(needle).expect("başlık yok");
+        row[..]
+            .iter()
+            .scan(0, |acc, s| {
+                let at = *acc;
+                *acc += s.len();
+                Some(at)
+            })
+            .position(|at| at == byte)
+            .unwrap() as u16
+    }
+
     #[test]
     fn sort_column_highlight_colors() {
         let mut app = App::sample();
         app.sort = SortKey::Busy;
         let mut t = Terminal::new(TestBackend::new(100, 30)).unwrap();
         t.draw(|f| render(f, f.area(), &app)).unwrap();
-        // 100 sütunda Render başlığı x=53'te başlar (7 + 1 + 44 + 1).
-        assert_eq!(t.backend().buffer()[(53, 0)].fg, theme::color(Tok::Accent));
-        assert_ne!(t.backend().buffer()[(92, 0)].fg, theme::color(Tok::Accent));
+        let (gpu, vram) = (header_col(&t, "GPU"), header_col(&t, "VRAM"));
+        let accent = theme::color(Tok::Accent);
+        assert_eq!(t.backend().buffer()[(gpu, 1)].fg, accent);
+        assert_ne!(t.backend().buffer()[(vram, 1)].fg, accent);
         app.sort = SortKey::Vram;
         t.draw(|f| render(f, f.area(), &app)).unwrap();
-        assert_eq!(t.backend().buffer()[(92, 0)].fg, theme::color(Tok::Accent));
-        assert_ne!(t.backend().buffer()[(53, 0)].fg, theme::color(Tok::Accent));
+        assert_eq!(t.backend().buffer()[(vram, 1)].fg, accent);
+        assert_ne!(t.backend().buffer()[(gpu, 1)].fg, accent);
+    }
+
+    #[test]
+    fn narrow_layout_hides_engine_columns() {
+        let app = App::sample();
+        let narrow = view_text(80, 24, &app);
+        assert!(narrow.contains("GPU") && narrow.contains("VRAM"));
+        assert!(!narrow.contains("Render") && !narrow.contains("Compute"));
+        let wide = view_text(100, 30, &app);
+        assert!(wide.contains("Render") && wide.contains("Compute"));
+    }
+
+    #[test]
+    fn filter_hint_in_bottom_border() {
+        let mut app = App::sample();
+        assert!(view_text(100, 30, &app).contains("/ ile filtrele"));
+        app.filter = "e".into();
+        assert!(!view_text(100, 30, &app).contains("/ ile filtrele"));
+    }
+
+    /// Dar düzen ve filtreli/seçili/taşan görünümler için snapshot yardımcısı.
+    fn draw_snapshot(w: u16, h: u16, app: &App) -> Terminal<TestBackend> {
+        let mut t = Terminal::new(TestBackend::new(w, h)).unwrap();
+        t.draw(|f| render(f, f.area(), app)).unwrap();
+        t
+    }
+
+    #[test]
+    fn snapshot_selected_third() {
+        let mut app = App::sample();
+        app.view = View::Procs;
+        for _ in 0..2 {
+            app.on_key(crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Down,
+                crossterm::event::KeyModifiers::NONE,
+            ));
+        }
+        assert_eq!(app.selected_index(), Some(2));
+        insta::assert_snapshot!(draw_snapshot(100, 30, &app).backend());
+    }
+
+    #[test]
+    fn snapshot_80x24() {
+        insta::assert_snapshot!(draw_snapshot(80, 24, &App::sample()).backend());
+    }
+
+    #[test]
+    fn snapshot_overflow_scrollbar() {
+        let mut app = App::sample();
+        if let Some(s) = app.last.as_mut() {
+            let base = s.procs.clone();
+            for i in 0..25u32 {
+                let mut p = base[(i % 5) as usize].clone();
+                p.pid = 1000 + i;
+                s.procs.push(p);
+            }
+        }
+        app.sort = SortKey::Pid;
+        let t = draw_snapshot(100, 20, &app);
+        let text = t.backend().to_string();
+        assert!(text.contains('┃'), "kaydırma çubuğu yok");
+        insta::assert_snapshot!(t.backend());
     }
 }
