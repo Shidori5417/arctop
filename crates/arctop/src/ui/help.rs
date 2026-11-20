@@ -1,4 +1,4 @@
-//! Yardım görünümü: tuş kısayolları ve eksik metriklerin nedenleri (§6).
+//! Yardım görünümü: modal pencere, kısayollar ve eksik metriklerin nedenleri (docs/TUI-DESIGN.md §7).
 
 use arctop_core::Metric;
 use ratatui::Frame;
@@ -11,39 +11,58 @@ use crate::fmt;
 use crate::ui::theme::{self, Tok};
 use crate::ui::widgets;
 
-/// Kısayol listesi: (tuş, açıklama). Sıra SPEC "Kısayollar" ile aynıdır.
+/// Kısayol listesi: (tuş, açıklama). İki sütunlu ızgarada önce sol, sonra sağ sütun dolar.
 const KEYS: &[(&str, &str)] = &[
     ("1-3", "görünüm"),
-    ("Tab", "sonraki görünüm"),
-    ("s", "sıralama sütunu"),
+    ("Tab", "sonraki"),
+    ("↑↓ j k", "seç"),
+    ("PgUp/PgDn", "sayfa"),
+    ("Home/End", "başa/sona"),
+    ("s", "sırala"),
     ("/", "filtre"),
-    ("+/-", "örnekleme aralığı"),
+    ("+/-", "aralık"),
     ("g", "60 sn / 5 dk"),
-    ("c", "kart değiştir"),
     ("F1", "yardım"),
+    ("Esc", "kapat"),
     ("q", "çıkış"),
 ];
 
-/// `c` satırının altında gösterilen not (yalnızca tek GPU sürümü).
-const C_NOTE: &str = "(birden fazla GPU varsa — henüz yok)";
+/// Tuş çipinin sabit genişliği (hücre). Bu uzunluğu aşan tuşlar tek boşlukla izlenir.
+const CHIP_W: usize = 6;
 /// Alt not: PMU izinleri.
 const FOOTNOTE: &str = "Root gerekmez. PMU için perf_event_paranoid <= 0 veya CAP_PERFMON gerekir (henüz kullanılmıyor).";
 /// Eksik metrik yokken gösterilen metin.
 const ALL_OK: &str = "Tüm metrikler okunabiliyor";
 /// Henüz snapshot yokken gösterilen metin.
 const WAITING: &str = "örnek bekleniyor…";
+/// Bölüm başlıkları.
+const SECTION_KEYS: &str = "Kısayollar";
+const SECTION_MISSING: &str = "Eksik metrikler";
 
 /// Modal pencereyi `area` (gövde) üzerine ortalayıp çizer; arkadaki görünüm
 /// çağıran tarafından zaten çizilmiştir. Genişlik `min(76, alan-4)`, yükseklik içerik kadar.
 pub fn render(f: &mut Frame, area: Rect, app: &App) {
-    let keys = key_lines();
-    let missing = missing_lines(app);
     let w = 76.min(area.width.saturating_sub(4));
-    // Sütun genişliği: iç genişliğin yarısı (kenarlık 2 + yatay boşluk 2 çıkarılır).
-    let col_w = usize::from(w.saturating_sub(4) / 2).max(1);
-    // Kenarlık (2) + not (2) + iki sütunun (sarma dahil) uzunu.
-    let content_h = wrapped_height(&keys, col_w).max(wrapped_height(&missing, col_w));
-    let h = u16::try_from(content_h + 4).unwrap_or(u16::MAX);
+    // Kenarlık (2) ve yatay iç boşluk (2) düşülmüş iç genişlik.
+    let inner_w = usize::from(w.saturating_sub(4)).max(1);
+    let col_w = (inner_w / 2).max(1);
+
+    let (left, right) = key_columns();
+    let grid_h = wrapped_height(&left, col_w).max(wrapped_height(&right, col_w));
+    let rows = if app.last.is_some() {
+        missing_rows(app)
+    } else {
+        Vec::new()
+    };
+    let body_h = if app.last.is_some() {
+        wrapped_height(&rows, inner_w)
+    } else {
+        1
+    };
+    let note_h = wrapped_height(&[Line::raw(FOOTNOTE)], inner_w);
+    // Başlık + ızgara + ayraç + başlık + gövde + not; kenarlık için +2.
+    let content_h = 1 + grid_h + 1 + 1 + body_h + note_h;
+    let h = to_u16(content_h + 2);
     let modal = widgets::centered(area, w, h);
     f.render_widget(Clear, modal);
 
@@ -55,66 +74,101 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
     let inner = block.inner(modal);
     f.render_widget(block, modal);
 
-    let [body, note] = Layout::vertical([Constraint::Min(0), Constraint::Length(2)]).areas(inner);
-    let [keys_area, missing_area] =
-        Layout::horizontal([Constraint::Percentage(50), Constraint::Min(0)]).areas(body);
+    let [head_k, grid, sep, head_m, body, note] = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(to_u16(grid_h)),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(to_u16(body_h)),
+        Constraint::Length(to_u16(note_h)),
+    ])
+    .areas(inner);
 
-    f.render_widget(Paragraph::new(keys).wrap(Wrap { trim: false }), keys_area);
     f.render_widget(
-        Paragraph::new(missing).wrap(Wrap { trim: false }),
-        missing_area,
+        Paragraph::new(Line::styled(SECTION_KEYS, theme::bold(Tok::Accent))),
+        head_k,
     );
+    let [left_a, right_a] =
+        Layout::horizontal([Constraint::Percentage(50), Constraint::Min(0)]).areas(grid);
+    f.render_widget(Paragraph::new(left).wrap(Wrap { trim: false }), left_a);
+    f.render_widget(Paragraph::new(right).wrap(Wrap { trim: false }), right_a);
+
+    f.render_widget(
+        Paragraph::new(Line::styled(
+            "─".repeat(usize::from(sep.width)),
+            theme::fg(Tok::Surface),
+        )),
+        sep,
+    );
+
+    f.render_widget(
+        Paragraph::new(Line::styled(SECTION_MISSING, theme::bold(Tok::Accent))),
+        head_m,
+    );
+    if app.last.is_none() {
+        f.render_widget(widgets::empty_state(WAITING), body);
+    } else {
+        f.render_widget(Paragraph::new(rows).wrap(Wrap { trim: false }), body);
+    }
+
     f.render_widget(
         Paragraph::new(Line::styled(FOOTNOTE, theme::fg(Tok::Muted))).wrap(Wrap { trim: true }),
         note,
     );
 }
 
+/// `usize` değeri `u16`'ya sığdırır; taşarsa en büyük değer.
+fn to_u16(n: usize) -> u16 {
+    u16::try_from(n).unwrap_or(u16::MAX)
+}
+
 /// Satırların `col_w` genişliğinde sarıldığında kaplayacağı yaklaşık satır sayısı.
 fn wrapped_height(lines: &[Line], col_w: usize) -> usize {
-    lines.iter().map(|l| l.width().div_ceil(col_w).max(1)).sum()
+    lines
+        .iter()
+        .map(|l| l.width().div_ceil(col_w.max(1)).max(1))
+        .sum()
 }
 
-/// Sol sütun: başlık ve kısayol satırları.
-fn key_lines() -> Vec<Line<'static>> {
-    let mut v = vec![Line::styled("Kısayollar", theme::bold(Tok::Accent))];
-    for (key, desc) in KEYS {
-        v.push(Line::from(vec![
-            Span::styled(format!("{key:<6}"), theme::bold(Tok::Accent)),
-            Span::raw(*desc),
-        ]));
-        if *key == "c" {
-            v.push(Line::styled(
-                format!("      {C_NOTE}"),
-                theme::fg(Tok::Muted),
-            ));
-        }
-    }
-    v
+/// Kısayolları iki sütuna böler: önce sol, sonra sağ sütun.
+fn key_columns() -> (Vec<Line<'static>>, Vec<Line<'static>>) {
+    let (l, r) = KEYS.split_at(KEYS.len().div_ceil(2));
+    (key_lines(l), key_lines(r))
 }
 
-/// Sağ sütun: başlık, eksik metrik satırları veya durum metni.
-fn missing_lines(app: &App) -> Vec<Line<'static>> {
-    let mut v = vec![Line::styled("Eksik metrikler", theme::bold(Tok::Accent))];
-    if app.last.is_none() {
-        v.push(Line::styled(WAITING, theme::fg(Tok::Muted)));
-    }
+/// Bir sütunun satırları: tuş çipi (Accent kalın) + açıklama.
+fn key_lines(keys: &[(&'static str, &'static str)]) -> Vec<Line<'static>> {
+    keys.iter()
+        .map(|&(key, desc)| {
+            Line::from(vec![
+                Span::styled(chip(key), theme::bold(Tok::Accent)),
+                Span::raw(desc),
+            ])
+        })
+        .collect()
+}
+
+/// Tuş çipi: `CHIP_W` hücreye doldurulur, arkasına bir boşluk eklenir. `CHIP_W`'den uzun
+/// tuşlar (`PgUp/PgDn`, `Home/End`) çipi taşırır; açıklamaları o satırda bir kayar.
+fn chip(key: &str) -> String {
+    let pad = CHIP_W.saturating_sub(key.chars().count()) + 1;
+    format!("{key}{}", " ".repeat(pad))
+}
+
+/// Eksik metrik satırları: `● ad` (Warn) + ` — neden` (Muted). Hiç yoksa tek "okunabiliyor" satırı.
+fn missing_rows(app: &App) -> Vec<Line<'static>> {
     let rows = missing(app);
     if rows.is_empty() {
-        if app.last.is_some() {
-            v.push(Line::styled(ALL_OK, theme::fg(Tok::Muted)));
-        }
-        return v;
+        return vec![Line::styled(format!("● {ALL_OK}"), theme::fg(Tok::Ok))];
     }
-    for (name, reason) in rows {
-        v.push(Line::from(vec![
-            Span::raw(name),
-            Span::raw(" "),
-            Span::styled(fmt::DASH, theme::fg(Tok::Muted)),
-            Span::styled(format!(" {reason}"), theme::fg(Tok::Muted)),
-        ]));
-    }
-    v
+    rows.into_iter()
+        .map(|(name, reason)| {
+            Line::from(vec![
+                Span::styled(format!("● {name}"), theme::fg(Tok::Warn)),
+                Span::styled(format!(" {} {reason}", fmt::DASH), theme::fg(Tok::Muted)),
+            ])
+        })
+        .collect()
 }
 
 /// Yetenek adı, alan adı ve görünen ad. Aynı metrik hem yetenek hem alan adıyla
@@ -208,6 +262,14 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_waiting() {
+        let mut app = App::sample();
+        app.last = None;
+        let t = draw(&app, 100, 30);
+        insta::assert_snapshot!(t.backend());
+    }
+
+    #[test]
     fn fits_80x24_without_panic() {
         let text = text(&draw(&App::sample(), 80, 24));
         assert!(text.contains("Kısayollar"));
@@ -220,6 +282,22 @@ mod tests {
         app.last = None;
         let text = text(&draw(&app, 80, 24));
         assert!(text.contains(WAITING));
+    }
+
+    #[test]
+    fn shortcut_list_has_no_card_key() {
+        assert_eq!(KEYS.len(), 12);
+        assert!(!KEYS.iter().any(|(k, _)| *k == "c"));
+        let text = text(&draw(&App::sample(), 100, 30));
+        assert!(!text.contains("kart değiştir"));
+    }
+
+    #[test]
+    fn chip_pads_to_six_plus_gap() {
+        assert_eq!(chip("q"), "q      ");
+        assert_eq!(chip("1-3").chars().count(), CHIP_W + 1);
+        assert_eq!(chip("↑↓ j k"), "↑↓ j k ");
+        assert_eq!(chip("PgUp/PgDn"), "PgUp/PgDn ");
     }
 
     #[test]
@@ -275,8 +353,8 @@ mod tests {
 
     #[test]
     fn no_panic_at_small_sizes() {
-        // 40x10 ve 20x4: örnekli, örneksiz ve eksik metrikli durumlar panik atmamalı.
-        for (w, h) in [(40, 10), (20, 4)] {
+        // 60x20, 40x10 ve 20x4: örnekli ve örneksiz durumlar panik atmamalı.
+        for (w, h) in [(60, 20), (40, 10), (20, 4)] {
             draw(&App::sample(), w, h);
             let mut waiting = App::sample();
             waiting.last = None;
