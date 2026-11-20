@@ -1,6 +1,6 @@
 //! Uygulama durumu ve tuş işleme (§6). Çizim yapmaz; yalnızca durumu değiştirir.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use arctop_core::history::History;
 use arctop_core::{Capabilities, Device, ProcUsage, Snapshot};
@@ -10,6 +10,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 pub const MIN_INTERVAL: Duration = Duration::from_millis(250);
 /// Örnekleme aralığı üst sınırı.
 pub const MAX_INTERVAL: Duration = Duration::from_secs(5);
+/// PgUp/PgDn ile seçimin kaydığı satır sayısı.
+const PAGE: usize = 10;
 
 /// Aktif görünüm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -91,8 +93,14 @@ pub struct App {
     pub interval: Duration,
     /// Çıkış istendi mi?
     pub should_quit: bool,
+    /// Son snapshot'ın geldiği an (canlılık noktası için).
+    pub last_snapshot_at: Option<Instant>,
     /// F1 ile Yardım'dan dönülecek görünüm (Help olamaz).
     return_view: View,
+    /// Seçili sürecin PID'i (seçim PID'e bağlıdır).
+    sel_pid: Option<u32>,
+    /// Seçimin son bilinen indeksi; PID kaybolunca en yakın indeksi bulmak için.
+    sel_idx: usize,
 }
 
 impl App {
@@ -110,7 +118,10 @@ impl App {
             history: History::new(),
             interval: interval.clamp(MIN_INTERVAL, MAX_INTERVAL),
             should_quit: false,
+            last_snapshot_at: None,
             return_view: View::Overview,
+            sel_pid: None,
+            sel_idx: 0,
         }
     }
 
@@ -118,6 +129,65 @@ impl App {
     pub fn on_snapshot(&mut self, s: Snapshot) {
         self.history.push(&s);
         self.last = Some(s);
+        self.last_snapshot_at = Some(Instant::now());
+        self.reconcile_selection();
+    }
+
+    /// Yardım açıkken arkada çizilecek görünüm (Help açık değilse geçerli görünüm).
+    pub fn help_return_view(&self) -> View {
+        self.return_view
+    }
+
+    /// Son snapshot en fazla `interval / 2` önce geldiyse `true` (canlılık noktası yanar).
+    pub fn is_fresh(&self, now: Instant) -> bool {
+        self.last_snapshot_at
+            .is_some_and(|t| t + self.interval / 2 > now)
+    }
+
+    /// Seçili sürecin PID'i (liste boşsa `None`).
+    #[allow(dead_code)] // T-028 (Süreçler) kullanır.
+    pub fn selected_pid(&self) -> Option<u32> {
+        self.sel_pid
+    }
+
+    /// Seçili sürecin `visible_procs()` içindeki indeksi.
+    #[allow(dead_code)] // T-028 (Süreçler) kullanır.
+    pub fn selected_index(&self) -> Option<usize> {
+        let pid = self.sel_pid?;
+        self.visible_procs().iter().position(|p| p.pid == pid)
+    }
+
+    /// Seçimi görünür listeyle uzlaştırır: aynı PID varsa indeksini günceller; yoksa
+    /// eski indekse en yakın satırı (sona taşarsa sonuncuyu) seçer; liste boşsa seçimi kaldırır.
+    /// İlk kez liste dolunca ilk satır seçilir.
+    fn reconcile_selection(&mut self) {
+        let pids: Vec<u32> = self.visible_procs().iter().map(|p| p.pid).collect();
+        if pids.is_empty() {
+            self.sel_pid = None;
+            self.sel_idx = 0;
+            return;
+        }
+        let idx = self
+            .sel_pid
+            .and_then(|pid| pids.iter().position(|&p| p == pid))
+            .unwrap_or_else(|| self.sel_idx.min(pids.len() - 1));
+        self.sel_idx = idx;
+        self.sel_pid = Some(pids[idx]);
+    }
+
+    /// Seçimi `f(mevcut, uzunluk)` ile verilen indekse taşır (sınırlara kırpılır).
+    fn move_selection(&mut self, f: impl FnOnce(usize, usize) -> usize) {
+        let pids: Vec<u32> = self.visible_procs().iter().map(|p| p.pid).collect();
+        if pids.is_empty() {
+            return;
+        }
+        let cur = self
+            .sel_pid
+            .and_then(|pid| pids.iter().position(|&p| p == pid))
+            .unwrap_or(0);
+        let idx = f(cur, pids.len()).min(pids.len() - 1);
+        self.sel_idx = idx;
+        self.sel_pid = Some(pids[idx]);
     }
 
     /// Görünümü değiştirir; Help'ten çıkılırsa dönüş görünümü de güncellenir.
@@ -148,9 +218,34 @@ impl App {
                 KeyCode::Char(c) => self.filter.push(c),
                 _ => {}
             }
+            self.reconcile_selection();
             return None;
         }
+        let action = self.handle_key(key);
+        // Sıralama/filtre değişmiş olabilir: seçimi PID'e göre yeniden hizala.
+        self.reconcile_selection();
+        action
+    }
+
+    /// Filtre düzenlenmiyorken tuş işleme.
+    fn handle_key(&mut self, key: KeyEvent) -> Option<Action> {
+        let in_procs = self.view == View::Procs;
         match key.code {
+            KeyCode::Esc if self.view == View::Help => self.view = self.return_view,
+            KeyCode::Up | KeyCode::Char('k') if in_procs => {
+                self.move_selection(|c, _| c.saturating_sub(1));
+            }
+            KeyCode::Down | KeyCode::Char('j') if in_procs => {
+                self.move_selection(|c, _| c + 1);
+            }
+            KeyCode::PageUp if in_procs => {
+                self.move_selection(|c, _| c.saturating_sub(PAGE));
+            }
+            KeyCode::PageDown if in_procs => {
+                self.move_selection(|c, _| c + PAGE);
+            }
+            KeyCode::Home if in_procs => self.move_selection(|_, _| 0),
+            KeyCode::End if in_procs => self.move_selection(|_, n| n - 1),
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Char('1') => self.goto(View::Overview),
             KeyCode::Char('2') => self.goto(View::Charts),
@@ -447,5 +542,110 @@ mod tests {
         let app = App::sample();
         assert!(app.last.is_some());
         assert_eq!(app.history.freq_act().len(), 300);
+    }
+
+    #[test]
+    fn selection_moves_within_bounds_in_procs_only() {
+        let mut app = App::sample();
+        // Procs dışında hareket etmez ama ilk satır varsayılan seçili.
+        assert_eq!(app.selected_pid(), Some(400));
+        app.on_key(key(KeyCode::Down));
+        assert_eq!(app.selected_pid(), Some(400));
+        app.on_key(ch('3'));
+        app.on_key(key(KeyCode::Up));
+        assert_eq!(app.selected_index(), Some(0), "üst sınır");
+        app.on_key(key(KeyCode::Down));
+        app.on_key(ch('j'));
+        assert_eq!(app.selected_index(), Some(2));
+        assert_eq!(app.selected_pid(), Some(100));
+        app.on_key(ch('k'));
+        assert_eq!(app.selected_index(), Some(1));
+        app.on_key(key(KeyCode::End));
+        assert_eq!(app.selected_index(), Some(4));
+        app.on_key(key(KeyCode::Down));
+        assert_eq!(app.selected_index(), Some(4), "alt sınır");
+        app.on_key(key(KeyCode::PageUp));
+        assert_eq!(app.selected_index(), Some(0));
+        app.on_key(key(KeyCode::PageDown));
+        assert_eq!(app.selected_index(), Some(4));
+        app.on_key(key(KeyCode::Home));
+        assert_eq!(app.selected_index(), Some(0));
+    }
+
+    #[test]
+    fn selection_ignored_while_editing_filter() {
+        let mut app = App::sample();
+        app.on_key(ch('3'));
+        app.on_key(ch('/'));
+        app.on_key(ch('j'));
+        app.on_key(key(KeyCode::Down));
+        assert_eq!(app.filter, "j");
+        assert_eq!(
+            app.selected_pid(),
+            None,
+            "filtre 'j' hiçbir süreçle eşleşmez"
+        );
+    }
+
+    #[test]
+    fn selection_follows_pid_across_resort() {
+        let mut app = App::sample();
+        app.on_key(ch('3'));
+        app.on_key(key(KeyCode::Down));
+        app.on_key(key(KeyCode::Down));
+        assert_eq!(app.selected_pid(), Some(100));
+        app.on_key(ch('s')); // Vram: 300, 100, 500, 200, 400
+        assert_eq!(app.selected_pid(), Some(100));
+        assert_eq!(app.selected_index(), Some(1));
+        app.on_key(ch('s')); // Pid
+        assert_eq!(app.selected_index(), Some(0));
+    }
+
+    #[test]
+    fn selection_falls_back_to_nearest_index_when_pid_vanishes() {
+        let mut app = App::sample();
+        app.on_key(ch('3'));
+        app.on_key(key(KeyCode::End)); // pid 200, indeks 4
+        assert_eq!(app.selected_pid(), Some(200));
+        let mut snap = app.last.clone().unwrap();
+        snap.procs.retain(|p| p.pid != 200);
+        app.on_snapshot(snap.clone());
+        assert_eq!(
+            app.selected_index(),
+            Some(3),
+            "sondan taşan en yakın indeks"
+        );
+        assert_eq!(app.selected_pid(), Some(500));
+        snap.procs.retain(|p| p.pid != 300 && p.pid != 100);
+        app.on_snapshot(snap.clone());
+        assert_eq!(app.selected_pid(), Some(500));
+        snap.procs.clear();
+        app.on_snapshot(snap);
+        assert_eq!(app.selected_pid(), None);
+        assert_eq!(app.selected_index(), None);
+    }
+
+    #[test]
+    fn esc_closes_help_and_is_noop_elsewhere() {
+        let mut app = App::sample();
+        app.on_key(ch('2'));
+        app.on_key(key(KeyCode::F(1)));
+        assert_eq!(app.view, View::Help);
+        assert_eq!(app.help_return_view(), View::Charts);
+        app.on_key(key(KeyCode::Esc));
+        assert_eq!(app.view, View::Charts);
+        app.on_key(key(KeyCode::Esc));
+        assert_eq!(app.view, View::Charts);
+    }
+
+    #[test]
+    fn is_fresh_uses_half_interval() {
+        let mut app = App::sample(); // aralık 1 sn
+        let t = app.last_snapshot_at.unwrap();
+        assert!(app.is_fresh(t));
+        assert!(app.is_fresh(t + Duration::from_millis(499)));
+        assert!(!app.is_fresh(t + Duration::from_millis(500)));
+        app.last_snapshot_at = None;
+        assert!(!app.is_fresh(t));
     }
 }

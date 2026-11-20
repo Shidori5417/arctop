@@ -11,7 +11,7 @@ use ratatui::widgets::{Block, Borders, Gauge, Paragraph};
 
 use crate::app::App;
 use crate::fmt;
-use crate::ui::theme;
+use crate::ui::theme::{self, Tok};
 
 /// Satır etiketi sütununun genişliği (en uzun etiket: "Video-Enhance").
 const LABEL_W: u16 = 13;
@@ -28,7 +28,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(theme::border())
-        .title_style(theme::title())
+        .title_style(theme::bold(Tok::Accent))
         .title(" Özet ");
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -42,7 +42,10 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
         // Henüz örnek yok: bekleme yazısı, panik yok.
         if let Some(row) = row_at(inner, inner.y.saturating_add(2)) {
             f.render_widget(
-                Paragraph::new(Line::from(Span::styled("örnek bekleniyor…", theme::dim()))),
+                Paragraph::new(Line::from(Span::styled(
+                    "örnek bekleniyor…",
+                    theme::fg(Tok::Muted),
+                ))),
                 row,
             );
         }
@@ -73,7 +76,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
                     "motor verisi yok (ilk örnek)",
-                    theme::dim(),
+                    theme::fg(Tok::Muted),
                 ))),
                 row,
             );
@@ -90,7 +93,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
             row,
             engine_label(e.class),
             Line::from(Span::raw(fmt::pct(e.busy_pct))),
-            Some((r, theme::gauge(e.busy_pct))),
+            Some((r, Style::default().fg(theme::load_color(e.busy_pct)))),
         );
         y = y.saturating_add(1);
     }
@@ -99,14 +102,14 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
 /// Üst bilgi satırı: kart adı, sürücü, PCI yuvası, örnekleme aralığı.
 fn header_line(app: &App) -> Line<'static> {
     Line::from(vec![
-        Span::styled(app.device.name.clone(), theme::title()),
+        Span::styled(app.device.name.clone(), theme::bold(Tok::Accent)),
         Span::raw(format!(
             " · {} · {} · ",
             app.device.driver, app.device.pci_slot
         )),
         Span::styled(
             format!("aralık: {} ms", app.interval.as_millis()),
-            theme::dim(),
+            theme::fg(Tok::Muted),
         ),
     ])
 }
@@ -134,7 +137,10 @@ fn freq_content(freq: &FreqInfo) -> RowContent {
     ]);
     let gauge = freq.max.value().map(|&max| {
         let r = ratio(f64::from(act), f64::from(max));
-        (r, theme::gauge((r * PCT_SCALE) as f32))
+        (
+            r,
+            Style::default().fg(theme::load_color((r * PCT_SCALE) as f32)),
+        )
     });
     (line, gauge)
 }
@@ -151,7 +157,10 @@ fn power_content(snap: &Snapshot) -> RowContent {
     ]);
     let gauge = limit.map(|&pl| {
         let r = ratio(f64::from(pw), f64::from(pl));
-        (r, theme::gauge((r * PCT_SCALE) as f32))
+        (
+            r,
+            Style::default().fg(theme::load_color((r * PCT_SCALE) as f32)),
+        )
     });
     (line, gauge)
 }
@@ -163,7 +172,10 @@ fn temp_content(snap: &Snapshot) -> RowContent {
     };
     (
         Line::from(Span::raw(fmt::metric(&snap.temp_c, "°C"))),
-        Some((ratio(f64::from(t), PCT_SCALE), theme::gauge(t))),
+        Some((
+            ratio(f64::from(t), PCT_SCALE),
+            Style::default().fg(theme::load_color(t)),
+        )),
     )
 }
 
@@ -188,13 +200,19 @@ fn vram_content(snap: &Snapshot) -> RowContent {
                 Span::raw(" / "),
                 Span::raw(fmt::bytes(total)),
             ]);
-            (line, Some((r, theme::gauge((r * PCT_SCALE) as f32))))
+            (
+                line,
+                Some((
+                    r,
+                    Style::default().fg(theme::load_color((r * PCT_SCALE) as f32)),
+                )),
+            )
         }
         None => (
             Line::from(vec![
                 Span::raw(fmt::bytes(used)),
                 Span::raw(" · toplam: "),
-                Span::styled(fmt::DASH, theme::dim()),
+                Span::styled(fmt::DASH, theme::fg(Tok::Muted)),
             ]),
             None,
         ),
@@ -203,14 +221,14 @@ fn vram_content(snap: &Snapshot) -> RowContent {
 
 /// Unavailable satır içeriği: dim "—". Nedeni F1 ekranında yazılır, burada yazılmaz.
 fn dash_line() -> Line<'static> {
-    Line::from(Span::styled(fmt::DASH, theme::dim()))
+    Line::from(Span::styled(fmt::DASH, theme::fg(Tok::Muted)))
 }
 
 /// Metrik değerini düz metin; Unavailable ise dim "—".
 fn value_span<T: Display>(m: &Metric<T>, unit: &str) -> Span<'static> {
     match m {
         Metric::Value(_) => Span::raw(fmt::metric(m, unit)),
-        Metric::Unavailable(_) => Span::styled(fmt::DASH, theme::dim()),
+        Metric::Unavailable(_) => Span::styled(fmt::DASH, theme::fg(Tok::Muted)),
     }
 }
 

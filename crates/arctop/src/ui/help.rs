@@ -4,11 +4,12 @@ use arctop_core::Metric;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+use ratatui::widgets::{Clear, Paragraph, Wrap};
 
 use crate::app::App;
 use crate::fmt;
-use crate::ui::theme;
+use crate::ui::theme::{self, Tok};
+use crate::ui::widgets;
 
 /// Kısayol listesi: (tuş, açıklama). Sıra SPEC "Kısayollar" ile aynıdır.
 const KEYS: &[(&str, &str)] = &[
@@ -32,44 +33,61 @@ const ALL_OK: &str = "Tüm metrikler okunabiliyor";
 /// Henüz snapshot yokken gösterilen metin.
 const WAITING: &str = "örnek bekleniyor…";
 
-/// Görünümü `area` içine çizer.
+/// Modal pencereyi `area` (gövde) üzerine ortalayıp çizer; arkadaki görünüm
+/// çağıran tarafından zaten çizilmiştir. Genişlik `min(76, alan-4)`, yükseklik içerik kadar.
 pub fn render(f: &mut Frame, area: Rect, app: &App) {
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(theme::border())
-        .title_style(theme::title())
-        .title(" Yardım ");
-    let inner = block.inner(area);
-    f.render_widget(block, area);
+    let keys = key_lines();
+    let missing = missing_lines(app);
+    let w = 76.min(area.width.saturating_sub(4));
+    // Sütun genişliği: iç genişliğin yarısı (kenarlık 2 + yatay boşluk 2 çıkarılır).
+    let col_w = usize::from(w.saturating_sub(4) / 2).max(1);
+    // Kenarlık (2) + not (2) + iki sütunun (sarma dahil) uzunu.
+    let content_h = wrapped_height(&keys, col_w).max(wrapped_height(&missing, col_w));
+    let h = u16::try_from(content_h + 4).unwrap_or(u16::MAX);
+    let modal = widgets::centered(area, w, h);
+    f.render_widget(Clear, modal);
+
+    let block = widgets::panel_with(
+        "Yardım",
+        Line::styled(" F1/Esc kapat ", theme::fg(Tok::Muted)),
+    )
+    .border_style(theme::border_focus());
+    let inner = block.inner(modal);
+    f.render_widget(block, modal);
 
     let [body, note] = Layout::vertical([Constraint::Min(0), Constraint::Length(2)]).areas(inner);
     let [keys_area, missing_area] =
         Layout::horizontal([Constraint::Percentage(50), Constraint::Min(0)]).areas(body);
 
+    f.render_widget(Paragraph::new(keys).wrap(Wrap { trim: false }), keys_area);
     f.render_widget(
-        Paragraph::new(key_lines()).wrap(Wrap { trim: false }),
-        keys_area,
-    );
-    f.render_widget(
-        Paragraph::new(missing_lines(app)).wrap(Wrap { trim: false }),
+        Paragraph::new(missing).wrap(Wrap { trim: false }),
         missing_area,
     );
     f.render_widget(
-        Paragraph::new(Line::styled(FOOTNOTE, theme::dim())).wrap(Wrap { trim: true }),
+        Paragraph::new(Line::styled(FOOTNOTE, theme::fg(Tok::Muted))).wrap(Wrap { trim: true }),
         note,
     );
 }
 
+/// Satırların `col_w` genişliğinde sarıldığında kaplayacağı yaklaşık satır sayısı.
+fn wrapped_height(lines: &[Line], col_w: usize) -> usize {
+    lines.iter().map(|l| l.width().div_ceil(col_w).max(1)).sum()
+}
+
 /// Sol sütun: başlık ve kısayol satırları.
 fn key_lines() -> Vec<Line<'static>> {
-    let mut v = vec![Line::styled("Kısayollar", theme::title())];
+    let mut v = vec![Line::styled("Kısayollar", theme::bold(Tok::Accent))];
     for (key, desc) in KEYS {
         v.push(Line::from(vec![
-            Span::styled(format!("{key:<6}"), theme::title()),
+            Span::styled(format!("{key:<6}"), theme::bold(Tok::Accent)),
             Span::raw(*desc),
         ]));
         if *key == "c" {
-            v.push(Line::styled(format!("      {C_NOTE}"), theme::dim()));
+            v.push(Line::styled(
+                format!("      {C_NOTE}"),
+                theme::fg(Tok::Muted),
+            ));
         }
     }
     v
@@ -77,14 +95,14 @@ fn key_lines() -> Vec<Line<'static>> {
 
 /// Sağ sütun: başlık, eksik metrik satırları veya durum metni.
 fn missing_lines(app: &App) -> Vec<Line<'static>> {
-    let mut v = vec![Line::styled("Eksik metrikler", theme::title())];
+    let mut v = vec![Line::styled("Eksik metrikler", theme::bold(Tok::Accent))];
     if app.last.is_none() {
-        v.push(Line::styled(WAITING, theme::dim()));
+        v.push(Line::styled(WAITING, theme::fg(Tok::Muted)));
     }
     let rows = missing(app);
     if rows.is_empty() {
         if app.last.is_some() {
-            v.push(Line::styled(ALL_OK, theme::dim()));
+            v.push(Line::styled(ALL_OK, theme::fg(Tok::Muted)));
         }
         return v;
     }
@@ -92,8 +110,8 @@ fn missing_lines(app: &App) -> Vec<Line<'static>> {
         v.push(Line::from(vec![
             Span::raw(name),
             Span::raw(" "),
-            Span::styled(fmt::DASH, theme::dim()),
-            Span::styled(format!(" {reason}"), theme::dim()),
+            Span::styled(fmt::DASH, theme::fg(Tok::Muted)),
+            Span::styled(format!(" {reason}"), theme::fg(Tok::Muted)),
         ]));
     }
     v

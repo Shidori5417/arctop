@@ -9,7 +9,7 @@ use arctop_core::{EngineClass, Metric, ProcUsage};
 
 use crate::app::{App, SortKey};
 use crate::fmt;
-use crate::ui::theme;
+use crate::ui::theme::{self, Tok};
 
 /// Tablodaki motor sütunlarının sırası (Render..Compute grubu).
 const ENGINE_COLUMNS: [EngineClass; 5] = [
@@ -41,7 +41,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
 
 /// Gövde alanına soluk tek satır bilgi iletisi yazar.
 fn render_message(f: &mut Frame, area: Rect, msg: &str) {
-    f.render_widget(Paragraph::new(msg).style(theme::dim()), area);
+    f.render_widget(Paragraph::new(msg).style(theme::fg(Tok::Muted)), area);
 }
 
 /// Tabloyu çizer; başlıkta aktif sıralama vurgulu, satırlar `procs` sırasıyla.
@@ -94,7 +94,11 @@ fn header_cell(base: &str, active: bool, mark: &str) -> Cell<'static> {
     } else {
         format!("{base} {mark}")
     };
-    let style = if active { theme::title() } else { theme::tab() };
+    let style = if active {
+        theme::bold(Tok::Accent)
+    } else {
+        theme::fg(Tok::Muted)
+    };
     Cell::from(Span::styled(text, style))
 }
 
@@ -110,7 +114,7 @@ fn proc_row(p: &ProcUsage) -> Row<'static> {
 fn engine_cell(p: &ProcUsage, class: EngineClass) -> Cell<'static> {
     match p.engines.iter().find(|e| e.class == class) {
         Some(e) => Cell::from(fmt::pct(e.busy_pct)),
-        None => Cell::from(Span::styled(fmt::DASH, theme::dim())),
+        None => Cell::from(Span::styled(fmt::DASH, theme::fg(Tok::Muted))),
     }
 }
 
@@ -118,7 +122,7 @@ fn engine_cell(p: &ProcUsage, class: EngineClass) -> Cell<'static> {
 fn vram_cell(p: &ProcUsage) -> Cell<'static> {
     match &p.vram_bytes {
         Metric::Value(b) => Cell::from(fmt::bytes(*b)),
-        Metric::Unavailable(_) => Cell::from(Span::styled(fmt::DASH, theme::dim())),
+        Metric::Unavailable(_) => Cell::from(Span::styled(fmt::DASH, theme::fg(Tok::Muted))),
     }
 }
 
@@ -136,14 +140,14 @@ fn render_status(f: &mut Frame, area: Rect, app: &App, visible: usize, total: us
 fn filter_spans(app: &App) -> Vec<Span<'static>> {
     if app.filter_editing {
         vec![
-            Span::styled("/", theme::title()),
+            Span::styled("/", theme::bold(Tok::Accent)),
             Span::raw(format!(" {}_", app.filter)),
         ]
     } else if app.filter.is_empty() {
-        vec![Span::styled("/ ile filtrele", theme::dim())]
+        vec![Span::styled("/ ile filtrele", theme::fg(Tok::Muted))]
     } else {
         vec![
-            Span::styled("/", theme::title()),
+            Span::styled("/", theme::bold(Tok::Accent)),
             Span::raw(format!(" {}", app.filter)),
         ]
     }
@@ -289,11 +293,11 @@ mod tests {
         let mut t = Terminal::new(TestBackend::new(100, 30)).unwrap();
         t.draw(|f| render(f, f.area(), &app)).unwrap();
         // 100 sütunda Render başlığı x=53'te başlar (7 + 1 + 44 + 1).
-        assert_eq!(t.backend().buffer()[(53, 0)].fg, theme::ACCENT);
-        assert_ne!(t.backend().buffer()[(92, 0)].fg, theme::ACCENT);
+        assert_eq!(t.backend().buffer()[(53, 0)].fg, theme::color(Tok::Accent));
+        assert_ne!(t.backend().buffer()[(92, 0)].fg, theme::color(Tok::Accent));
         app.sort = SortKey::Vram;
         t.draw(|f| render(f, f.area(), &app)).unwrap();
-        assert_eq!(t.backend().buffer()[(92, 0)].fg, theme::ACCENT);
-        assert_ne!(t.backend().buffer()[(53, 0)].fg, theme::ACCENT);
+        assert_eq!(t.backend().buffer()[(92, 0)].fg, theme::color(Tok::Accent));
+        assert_ne!(t.backend().buffer()[(53, 0)].fg, theme::color(Tok::Accent));
     }
 }

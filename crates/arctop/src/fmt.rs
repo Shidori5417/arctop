@@ -34,6 +34,15 @@ pub fn pct(f: f32) -> String {
     format!("{f:.1}%")
 }
 
+/// Frekansı yazar: <1000 → "850 MHz", ≥1000 → "2.3 GHz" (1 ondalık).
+pub fn freq(mhz: u32) -> String {
+    if mhz >= 1000 {
+        format!("{:.1} GHz", f64::from(mhz) / 1000.0)
+    } else {
+        format!("{mhz} MHz")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -51,5 +60,15 @@ mod tests {
         assert_eq!(bytes(300 * 1024 * 1024), "300 MiB");
         assert_eq!(bytes(1536 * 1024 * 1024), "1.5 GiB");
         assert_eq!(pct(12.345), "12.3%");
+    }
+
+    #[test]
+    fn freq_units() {
+        assert_eq!(freq(0), "0 MHz");
+        assert_eq!(freq(850), "850 MHz");
+        assert_eq!(freq(999), "999 MHz");
+        assert_eq!(freq(1000), "1.0 GHz");
+        assert_eq!(freq(2300), "2.3 GHz");
+        assert_eq!(freq(2400), "2.4 GHz");
     }
 }
