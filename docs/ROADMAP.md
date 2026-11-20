@@ -48,9 +48,10 @@ Atamalar önerilir; Opus `CLAUDE.md` karar ağacına göre değiştirebilir. �
 - R-06 (hwmon xe label'ları) ve xe doğrulaması: xe donanımı bulunana kadar açık (ADR-007)
 
 ## Faz 7 — TUI v2 (modernleştirme; yalnızca Sonnet/Haiku)
-- [ ] **T-025** 🔒 `rust-coder` — palet, `ui::widgets`, başlık/altbilgi, modal yardım çerçevesi, App seçim/canlılık durumu
-- [ ] **T-026** `rust-coder` — Özet: stat kartları + sparkline, motorlar, en çok kullananlar
-- [ ] **T-027** `rust-coder` — Grafikler: metrik renkleri, birimli eksenler, zaman etiketleri, min/ort/maks
-- [ ] **T-028** `rust-coder` — Süreçler: seçim, kaydırma çubuğu, GPU mini çubuğu, duyarlı sütunlar
-- [ ] **T-029** `helper` — Yardım modal içeriği
-- [ ] **T-030** `helper` — README ekran görüntüleri, son kontrol
+- [x] **T-025** 🔒 `rust-coder` — palet, `ui::widgets`, başlık/altbilgi, modal yardım çerçevesi, App seçim/canlılık durumu
+- [x] **T-026** `rust-coder` — Özet: stat kartları + sparkline, motorlar, en çok kullananlar
+- [x] **T-027** `rust-coder` — Grafikler: metrik renkleri, birimli eksenler, zaman etiketleri, min/ort/maks
+- [x] **T-028** `rust-coder` — Süreçler: seçim, kaydırma çubuğu, GPU mini çubuğu, duyarlı sütunlar
+- [x] **T-029** `helper` — Yardım modal içeriği
+- [ ] **T-030** `rust-coder` — Özet cilası: 5 motor, Etkinlik paneli
+- [ ] **T-031** `helper` — yardım çip genişliği, ölü kod, README ekran görüntüleri
