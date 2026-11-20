@@ -53,5 +53,5 @@ Atamalar önerilir; Opus `CLAUDE.md` karar ağacına göre değiştirebilir. �
 - [x] **T-027** `rust-coder` — Grafikler: metrik renkleri, birimli eksenler, zaman etiketleri, min/ort/maks
 - [x] **T-028** `rust-coder` — Süreçler: seçim, kaydırma çubuğu, GPU mini çubuğu, duyarlı sütunlar
 - [x] **T-029** `helper` — Yardım modal içeriği
-- [ ] **T-030** `rust-coder` — Özet cilası: 5 motor, Etkinlik paneli
-- [ ] **T-031** `helper` — yardım çip genişliği, ölü kod, README ekran görüntüleri
+- [x] **T-030** `rust-coder` — Özet cilası: 5 motor, Etkinlik paneli
+- [x] **T-031** `helper` — yardım çip genişliği, ölü kod, README ekran görüntüleri

@@ -28,7 +28,7 @@ const KEYS: &[(&str, &str)] = &[
 ];
 
 /// Tuş çipinin sabit genişliği (hücre). Bu uzunluğu aşan tuşlar tek boşlukla izlenir.
-const CHIP_W: usize = 6;
+const CHIP_W: usize = 9;
 /// Alt not: PMU izinleri.
 const FOOTNOTE: &str = "Root gerekmez. PMU için perf_event_paranoid <= 0 veya CAP_PERFMON gerekir (henüz kullanılmıyor).";
 /// Eksik metrik yokken gösterilen metin.
@@ -149,7 +149,7 @@ fn key_lines(keys: &[(&'static str, &'static str)]) -> Vec<Line<'static>> {
 }
 
 /// Tuş çipi: `CHIP_W` hücreye doldurulur, arkasına bir boşluk eklenir. `CHIP_W`'den uzun
-/// tuşlar (`PgUp/PgDn`, `Home/End`) çipi taşırır; açıklamaları o satırda bir kayar.
+/// tuşlar çipi taşırır; açıklamaları o satırda bir kayar.
 fn chip(key: &str) -> String {
     let pad = CHIP_W.saturating_sub(key.chars().count()) + 1;
     format!("{key}{}", " ".repeat(pad))
@@ -293,10 +293,10 @@ mod tests {
     }
 
     #[test]
-    fn chip_pads_to_six_plus_gap() {
-        assert_eq!(chip("q"), "q      ");
+    fn chip_pads_to_nine_plus_gap() {
+        assert_eq!(chip("q"), "q         ");
         assert_eq!(chip("1-3").chars().count(), CHIP_W + 1);
-        assert_eq!(chip("↑↓ j k"), "↑↓ j k ");
+        assert_eq!(chip("↑↓ j k"), "↑↓ j k    ");
         assert_eq!(chip("PgUp/PgDn"), "PgUp/PgDn ");
     }
 

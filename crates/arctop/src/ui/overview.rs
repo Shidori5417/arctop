@@ -39,7 +39,7 @@ const TOP_PROCS: usize = 5;
 /// Alt sıranın en az içerik satırı (motor sınıfı sayısı).
 const BOTTOM_MIN_ROWS: usize = 5;
 /// Etkinlik paneli için gereken en küçük yükseklik.
-const ACTIVITY_MIN_H: u16 = 6;
+const ACTIVITY_MIN_H: u16 = 5;
 /// Sabit motor sırası.
 const ENGINE_ORDER: [EngineClass; 5] = [
     EngineClass::Render,

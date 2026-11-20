@@ -151,7 +151,6 @@ impl App {
     }
 
     /// Seçili sürecin `visible_procs()` içindeki indeksi.
-    #[allow(dead_code)] // T-028 (Süreçler) kullanır.
     pub fn selected_index(&self) -> Option<usize> {
         let pid = self.sel_pid?;
         self.visible_procs().iter().position(|p| p.pid == pid)
