@@ -56,11 +56,17 @@ Amaç: btop/bottom kalitesinde, sakin ama canlı bir arayüz. Boş alan yok, her
  │ Video-Enh.    ─────────────────────────────────    0% ││ steam        20%  ━━━               200 MiB │
  │ Compute       ─────────────────────────────────    0% ││ Xorg          5%  ━                 100 MiB │
  ╰───────────────────────────────────────────────────────╯╰──────────────────────────────────────────────╯
+ ╭ Etkinlik ─────────────────────────────────────────── 60 sn · en yoğun motor / güç ╮
+ │100%│        ⢀⣀⠤⠔⠒⢹                                                                  │
+ │ 50%│ ⣀⡠⠤⠤⠔⠒⠉⠁     ⡇                                                                  │
+ │  0%│⠉             ⢇                                                         şimdi    │
+ ╰──────────────────────────────── ━ motor  ━ güç ─────────────────────────────────────╯
 ```
 - **Stat kartları (üst sıra, 4 kart):** büyük değer (bold, metrik rengi) + birim (muted); ikinci satır bağlam (frekans: `cur · min–max`, `act==0` ise değer yerine `uykuda` muted; güç: limitin yüzdesi; sıcaklık: voltaj; VRAM: `toplam bilinmiyor` veya `%x / toplam`); alt satırlar: **sparkline** (`History` serisinin son `kart_genişliği` noktası, metrik rengi; `None` → 0). Sağ üst başlıkta: frekans `maks`, güç `limit`, sıcaklık `fan`, VRAM boş.
-- **Motorlar paneli:** her sınıf bir satır: ad (sabit 12 sütun), çubuk (`load_color`), sağa hizalı yüzde. Hiç motor yoksa ortalanmış muted metin. Başlıkta `en yoğun %N`.
+- **Motorlar paneli:** beş sınıf her zaman sabit sırada (Render, Copy, Video, Video-Enh., Compute) bir satır; verisi olmayan sınıf `0%` ve muted çizilir: ad (sabit 12 sütun), çubuk (`load_color`), sağa hizalı yüzde. Hiç motor yoksa ortalanmış muted metin. Başlıkta `en yoğun %N`.
 - **En çok kullananlar:** en yoğun 5 süreç (en yüksek motor yüzdesine göre; App'in sıralamasından bağımsız): ad, yüzde, mini çubuk, VRAM.
-- **Yükseklik dağılımı:** stat kartları 6 satır sabit; alt sıra kalan alanın tamamı. Dikey alan 18 satırdan azsa sparkline satırları düşer. Genişlik < 100: kartlar 2x2; < 60: kartlar tek sütun ve alt sıra yalnızca Motorlar.
+- **Etkinlik paneli:** alt sıranın altında tam genişlik; en yoğun motor % (`Busy`) ve güç (`Power`, limite ya da seri maksimumuna göre 0–100'e normalize) tek grafikte; başlıkta pencere, altta renkli lejant. Veri yoksa `veri toplanıyor…`.
+- **Yükseklik dağılımı:** stat kartları 6 satır sabit; alt sıra içerik kadar (`max(5, süreç sayısı) + 2`); kalan yükseklik ≥ 6 ise Etkinlik paneli onu doldurur, değilse alt sıra kalan alanı alır. Dikey alan 18 satırdan azsa sparkline satırları düşer. Genişlik < 100: kartlar 2x2; < 60: kartlar tek sütun ve alt sıra yalnızca Motorlar.
 
 ## 5. Grafikler görünümü
 - 2x2 panel (dar ekranda 1x4 dikey). Her panel: başlık solda metrik adı, sağda **son değer** (bold, metrik rengi); alt kenarlıkta (Block `title_bottom`) `min · ort · maks` (muted).

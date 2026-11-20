@@ -1,16 +1,17 @@
 //! Özet görünümü v2 (docs/TUI-DESIGN.md §4): dört stat kartı, Motorlar ve
-//! En çok kullananlar panelleri. Tüm stil kararları `theme`/`widgets` üzerinden.
+//! En çok kullananlar panelleri ile altta Etkinlik grafiği. Tüm stil kararları `theme`/`widgets` üzerinden.
 
 use arctop_core::history::Ring;
 use arctop_core::{EngineClass, Metric, Snapshot};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
-use ratatui::symbols;
+use ratatui::symbols::{self, Marker};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Paragraph, Sparkline};
+use ratatui::widgets::{Axis, Chart, Dataset, GraphType, Paragraph, Sparkline};
+use std::time::Duration;
 
-use crate::app::App;
+use crate::app::{App, ChartWindow};
 use crate::fmt;
 use crate::ui::theme::{self, Tok};
 use crate::ui::widgets;
@@ -35,6 +36,18 @@ const WIDE_W: u16 = 100;
 const NARROW_W: u16 = 60;
 /// Listelenen en çok kullanan süreç sayısı.
 const TOP_PROCS: usize = 5;
+/// Alt sıranın en az içerik satırı (motor sınıfı sayısı).
+const BOTTOM_MIN_ROWS: usize = 5;
+/// Etkinlik paneli için gereken en küçük yükseklik.
+const ACTIVITY_MIN_H: u16 = 6;
+/// Sabit motor sırası.
+const ENGINE_ORDER: [EngineClass; 5] = [
+    EngineClass::Render,
+    EngineClass::Copy,
+    EngineClass::Video,
+    EngineClass::VideoEnhance,
+    EngineClass::Compute,
+];
 /// Sparkline değerleri `spark_data` içinde ×10 ölçeklenir.
 const SPARK_SCALE: f64 = 10.0;
 
@@ -79,14 +92,26 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
         }
     }
 
-    // Alt sıra: dar ekranda yalnızca Motorlar.
-    if area.width < NARROW_W {
-        draw_engines(f, bottom, snap);
+    // Alt sıra yüksekliği içerik kadar; altında yer kalırsa Etkinlik paneli.
+    let row_h = (BOTTOM_MIN_ROWS.max(top_procs(snap).len()) as u16) + 2;
+    let (row, activity) = if bottom.height >= row_h + ACTIVITY_MIN_H {
+        let [r, a] =
+            Layout::vertical([Constraint::Length(row_h), Constraint::Min(0)]).areas(bottom);
+        (r, Some(a))
     } else {
-        let [l, r] = Layout::horizontal([Constraint::Percentage(55), Constraint::Percentage(45)])
-            .areas(bottom);
+        (bottom, None)
+    };
+    // Dar ekranda yalnızca Motorlar.
+    if area.width < NARROW_W {
+        draw_engines(f, row, snap);
+    } else {
+        let [l, r] =
+            Layout::horizontal([Constraint::Percentage(55), Constraint::Percentage(45)]).areas(row);
         draw_engines(f, l, snap);
         draw_procs(f, r, snap);
+    }
+    if let Some(a) = activity {
+        draw_activity(f, a, app);
     }
 }
 
@@ -372,8 +397,7 @@ fn draw_engines(f: &mut Frame, area: Rect, snap: &Snapshot) {
         return;
     }
     let bar_w = inner.width.saturating_sub(NAME_W + PCT_W + 2);
-    for (i, e) in snap
-        .engines
+    for (i, class) in ENGINE_ORDER
         .iter()
         .take(usize::from(inner.height))
         .enumerate()
@@ -383,21 +407,154 @@ fn draw_engines(f: &mut Frame, area: Rect, snap: &Snapshot) {
             height: 1,
             ..inner
         };
+        // Verisi olmayan sınıf 0% ve Muted çizilir.
+        let found = snap.engines.iter().find(|e| e.class == *class);
+        let pct = found.map_or(0.0, |e| e.busy_pct);
+        let text_style = if found.is_some() {
+            Style::default()
+        } else {
+            theme::fg(Tok::Muted)
+        };
         let mut spans = vec![
-            Span::raw(fit(engine_label(e.class), NAME_W)),
+            Span::styled(fit(engine_label(*class), NAME_W), text_style),
             Span::raw(" "),
         ];
         if bar_w >= MIN_BAR_W {
-            spans.extend(widgets::hbar(e.busy_pct, bar_w, theme::load_color(e.busy_pct)).spans);
+            spans.extend(widgets::hbar(pct, bar_w, theme::load_color(pct)).spans);
             spans.push(Span::raw(" "));
         }
-        spans.push(Span::raw(format!(
-            "{:>w$}",
-            fmt::pct(e.busy_pct),
-            w = usize::from(PCT_W)
-        )));
+        spans.push(Span::styled(
+            format!("{:>w$}", fmt::pct(pct), w = usize::from(PCT_W)),
+            text_style,
+        ));
         f.render_widget(Paragraph::new(Line::from(spans)), r);
     }
+}
+
+/// Pencerenin nokta sayısı: `ceil(süre / aralık)` (charts.rs ile aynı kural).
+fn window_points(window: ChartWindow, interval: Duration) -> usize {
+    let secs = match window {
+        ChartWindow::Last60s => 60.0,
+        ChartWindow::Last5m => 300.0,
+    };
+    if interval.is_zero() {
+        return 1;
+    }
+    (secs / interval.as_secs_f64()).ceil().max(1.0) as usize
+}
+
+/// Güç serisini 0–100'e normalize eder: `limit` (>0) varsa `w / limit × 100`, yoksa
+/// serinin maksimumuna göre. Sonuç [0, 100]'e kırpılır; `None` noktalar korunur.
+fn normalize_power(points: &[Option<f64>], limit: Option<f64>) -> Vec<Option<f64>> {
+    let denom = match limit {
+        Some(l) if l > 0.0 => l,
+        _ => points.iter().flatten().copied().fold(0.0, f64::max),
+    };
+    points
+        .iter()
+        .map(|p| {
+            p.map(|w| {
+                if denom > 0.0 {
+                    (w / denom * 100.0).clamp(0.0, 100.0)
+                } else {
+                    0.0
+                }
+            })
+        })
+        .collect()
+}
+
+/// `None` boşluklarında bölünmüş `(x, y)` parçaları; x, `offset` ile sağa hizalanır.
+fn split_segments(points: &[Option<f64>], offset: usize) -> Vec<Vec<(f64, f64)>> {
+    let mut segs: Vec<Vec<(f64, f64)>> = Vec::new();
+    let mut cur: Vec<(f64, f64)> = Vec::new();
+    for (i, p) in points.iter().enumerate() {
+        match p {
+            Some(v) => cur.push(((i + offset) as f64, v.clamp(0.0, 100.0))),
+            None if !cur.is_empty() => segs.push(std::mem::take(&mut cur)),
+            None => {}
+        }
+    }
+    if !cur.is_empty() {
+        segs.push(cur);
+    }
+    segs
+}
+
+/// Serinin pencereye düşen son noktaları (eskiden yeniye).
+fn tail(ring: &Ring<Option<f64>>, n: usize) -> Vec<Option<f64>> {
+    ring.iter().copied().rev().take(n).rev().collect()
+}
+
+/// Tek parçalık çizgi veri kümesi.
+fn line_ds(pts: &[(f64, f64)], tok: Tok) -> Dataset<'_> {
+    Dataset::default()
+        .data(pts)
+        .marker(Marker::Braille)
+        .graph_type(GraphType::Line)
+        .style(theme::fg(tok))
+}
+
+/// Etkinlik paneli: en yoğun motor % ve normalize güç, aynı grafikte.
+fn draw_activity(f: &mut Frame, area: Rect, app: &App) {
+    let win = match app.window {
+        ChartWindow::Last60s => "60 sn",
+        ChartWindow::Last5m => "5 dk",
+    };
+    let right = muted(format!(" {win} · en yoğun motor / güç "));
+    let legend = Line::from(vec![
+        Span::raw(" "),
+        Span::styled("━ motor", theme::fg(Tok::Busy)),
+        Span::raw("  "),
+        Span::styled("━ güç", theme::fg(Tok::Power)),
+        Span::raw(" "),
+    ])
+    .centered();
+    let block = widgets::panel_with("Etkinlik", right).title_bottom(legend);
+
+    let span = window_points(app.window, app.interval);
+    let busy = tail(app.history.busy_total(), span);
+    let limit = app
+        .last
+        .as_ref()
+        .and_then(|s| s.power_limit_w.value().copied())
+        .map(f64::from);
+    let power = normalize_power(&tail(app.history.power_w(), span), limit);
+    let busy_segs = split_segments(&busy, span.saturating_sub(busy.len()));
+    let power_segs = split_segments(&power, span.saturating_sub(power.len()));
+    if busy_segs.is_empty() && power_segs.is_empty() {
+        f.render_widget(widgets::empty_state("veri toplanıyor…").block(block), area);
+        return;
+    }
+    let muted_s = theme::fg(Tok::Muted);
+    let x_axis = Axis::default()
+        .bounds([0.0, span.saturating_sub(1).max(1) as f64])
+        .style(theme::fg(Tok::Surface))
+        .labels([
+            Line::default(),
+            Line::default(),
+            Line::styled("şimdi", muted_s),
+        ]);
+    let y_axis = Axis::default()
+        .bounds([0.0, 100.0])
+        .style(theme::fg(Tok::Surface))
+        .labels([
+            Line::styled("0%", muted_s),
+            Line::styled("50%", muted_s),
+            Line::styled("100%", muted_s),
+        ]);
+    let datasets: Vec<Dataset<'_>> = power_segs
+        .iter()
+        .map(|p| line_ds(p, Tok::Power))
+        .chain(busy_segs.iter().map(|p| line_ds(p, Tok::Busy)))
+        .collect();
+    f.render_widget(
+        Chart::new(datasets)
+            .block(block)
+            .x_axis(x_axis)
+            .y_axis(y_axis),
+        area,
+    );
 }
 
 /// Bir sürecin en yüksek motor doluluğu (motor yoksa 0).
@@ -570,9 +727,61 @@ mod tests {
     }
 
     #[test]
+    fn normalize_power_cases() {
+        let pts = [Some(50.0), None, Some(100.0), Some(300.0)];
+        // Limitli: w/limit*100, 100'e kırpılır.
+        assert_eq!(
+            normalize_power(&pts, Some(200.0)),
+            [Some(25.0), None, Some(50.0), Some(100.0)]
+        );
+        // Limitsiz: serinin maksimumuna göre.
+        let r = normalize_power(&pts, None);
+        assert!((r[0].unwrap() - 50.0 / 3.0).abs() < 1e-9);
+        assert_eq!(r[1], None);
+        assert!((r[2].unwrap() - 100.0 / 3.0).abs() < 1e-9);
+        assert_eq!(r[3], Some(100.0));
+        // Sıfır limit yok sayılır; hepsi None ya da 0 ise sıfıra bölme yok.
+        assert_eq!(normalize_power(&[None, None], Some(0.0)), [None, None]);
+        assert_eq!(normalize_power(&[Some(0.0)], None), [Some(0.0)]);
+    }
+
+    #[test]
+    fn all_engine_classes_listed() {
+        let text = screen(&App::sample(), 100, 30);
+        for want in [
+            "Render",
+            "Copy",
+            "Video ",
+            "Video-Enh.",
+            "Compute",
+            "Etkinlik",
+        ] {
+            assert!(text.contains(want), "yok: {want}");
+        }
+    }
+
+    #[test]
+    fn snapshot_120x40() {
+        let app = App::sample();
+        // unwrap: yalnızca testlerde (AGENTS.md).
+        let mut t = Terminal::new(TestBackend::new(120, 40)).unwrap();
+        t.draw(|f| render(f, f.area(), &app)).unwrap();
+        insta::assert_snapshot!(t.backend());
+    }
+
+    #[test]
     fn small_sizes_render_without_panic() {
         let mut app = App::sample();
-        for (w, h) in [(80, 24), (60, 20), (40, 10), (20, 4), (1, 1), (0, 0)] {
+        for (w, h) in [
+            (120, 40),
+            (100, 30),
+            (80, 24),
+            (60, 20),
+            (40, 10),
+            (20, 4),
+            (1, 1),
+            (0, 0),
+        ] {
             let _ = screen(&app, w, h);
         }
         app.last = None;
