@@ -17,7 +17,7 @@ use ratatui::widgets::{Axis, Block, Borders, Chart, Dataset, GraphType, Paragrap
 
 use crate::app::{App, ChartWindow};
 use crate::fmt;
-use crate::ui::theme;
+use crate::ui::theme::{self, Tok};
 
 /// Tek bir gösterge bloğunun tanımı.
 struct ChartDef<'a> {
@@ -94,10 +94,10 @@ fn render_waiting(f: &mut Frame, area: Rect) {
         .borders(Borders::ALL)
         .border_style(theme::border())
         .title(" Grafikler ")
-        .title_style(theme::title());
+        .title_style(theme::bold(Tok::Accent));
     f.render_widget(
         Paragraph::new("örnek bekleniyor…")
-            .style(theme::dim())
+            .style(theme::fg(Tok::Muted))
             .alignment(Alignment::Center)
             .block(block),
         area,
@@ -118,7 +118,9 @@ fn render_chart(f: &mut Frame, area: Rect, app: &App, def: &ChartDef) {
 
     if segs.is_empty() {
         f.render_widget(
-            Paragraph::new("veri yok").style(theme::dim()).block(block),
+            Paragraph::new("veri yok")
+                .style(theme::fg(Tok::Muted))
+                .block(block),
             area,
         );
         return;
@@ -131,19 +133,19 @@ fn render_chart(f: &mut Frame, area: Rect, app: &App, def: &ChartDef) {
     let x_max = (points.len().saturating_sub(1)).max(1) as f64;
     let y_axis = Axis::default()
         .bounds([0.0, y_max])
-        .style(theme::dim())
+        .style(theme::fg(Tok::Muted))
         .labels([
-            Line::styled(num(0.0, def.decimals), theme::dim()),
-            Line::styled(num(y_max / 2.0, def.decimals), theme::dim()),
-            Line::styled(num(y_max, def.decimals), theme::dim()),
+            Line::styled(num(0.0, def.decimals), theme::fg(Tok::Muted)),
+            Line::styled(num(y_max / 2.0, def.decimals), theme::fg(Tok::Muted)),
+            Line::styled(num(y_max, def.decimals), theme::fg(Tok::Muted)),
         ]);
     let x_axis = Axis::default()
         .bounds([0.0, x_max])
-        .style(theme::dim())
+        .style(theme::fg(Tok::Muted))
         .labels([
-            Line::styled("0", theme::dim()),
-            Line::styled(num(x_max / 2.0, 0), theme::dim()),
-            Line::styled("şimdi", theme::dim()),
+            Line::styled("0", theme::fg(Tok::Muted)),
+            Line::styled(num(x_max / 2.0, 0), theme::fg(Tok::Muted)),
+            Line::styled("şimdi", theme::fg(Tok::Muted)),
         ]);
     let datasets: Vec<Dataset<'_>> = segs
         .iter()
@@ -152,7 +154,7 @@ fn render_chart(f: &mut Frame, area: Rect, app: &App, def: &ChartDef) {
                 .data(pts)
                 .marker(Marker::Braille)
                 .graph_type(GraphType::Line)
-                .style(Style::default().fg(theme::ACCENT))
+                .style(Style::default().fg(theme::color(Tok::Accent)))
         })
         .collect();
     f.render_widget(
@@ -169,15 +171,15 @@ fn render_chart(f: &mut Frame, area: Rect, app: &App, def: &ChartDef) {
 fn title_line(app: &App, def: &ChartDef) -> Line<'static> {
     let mut spans = vec![Span::styled(
         format!(" {} · {}", def.title, window_label(app.window)),
-        theme::title(),
+        theme::bold(Tok::Accent),
     )];
     if let Some(last) = def.series.last() {
         let (text, style) = match last {
             Some(v) => (
                 format!(" · {:.*} {}", def.decimals, v, def.unit),
-                theme::title(),
+                theme::bold(Tok::Accent),
             ),
-            None => (format!(" · {}", fmt::DASH), theme::dim()),
+            None => (format!(" · {}", fmt::DASH), theme::fg(Tok::Muted)),
         };
         spans.push(Span::styled(text, style));
     }

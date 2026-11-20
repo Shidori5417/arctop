@@ -41,6 +41,7 @@ fn main() -> anyhow::Result<()> {
         run_once(&fs, &cli, &dev)
     } else {
         let recorder = cli.record.as_deref().map(Recorder::create).transpose()?;
+        ui::theme::init(ui::theme::detect_mode());
         run_tui(fs, dev, Duration::from_millis(cli.interval), recorder)
     }
 }
