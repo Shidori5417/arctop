@@ -402,4 +402,40 @@ mod tests {
         assert!(lines.next().unwrap().contains(",0,"));
         assert_eq!(lines.next(), None);
     }
+
+    #[test]
+    fn legacy_file_with_unterminated_last_row_is_terminated_before_append() {
+        let tmp = TempFile::new("legacy-noeol");
+        let old_header = HEADER[1..].join(",");
+        std::fs::write(
+            &tmp.0,
+            format!("{old_header}\n0,1,2,3,4,5,6,7,8,9,10,11,12,13"),
+        )
+        .unwrap();
+
+        let mut rec = Recorder::create(&tmp.0).unwrap();
+        assert!(rec.is_legacy());
+        rec.write(&Snapshot::empty(Instant::now())).unwrap();
+        drop(rec);
+
+        let rows = read_rows(&tmp.0);
+        assert_eq!(rows.len(), 3, "{rows:?}");
+        assert!(rows.iter().all(|r| r.len() == 14), "{rows:?}");
+        assert_eq!(rows[1][0], "0");
+    }
+
+    #[test]
+    fn current_file_with_unterminated_data_row_is_terminated_before_append() {
+        let tmp = TempFile::new("current-noeol");
+        let row = vec!["x"; HEADER.len()].join(",");
+        std::fs::write(&tmp.0, format!("{}\n{row}", HEADER.join(","))).unwrap();
+
+        let mut rec = Recorder::create(&tmp.0).unwrap();
+        rec.write(&Snapshot::empty(Instant::now())).unwrap();
+        drop(rec);
+
+        let rows = read_rows(&tmp.0);
+        assert_eq!(rows.len(), 3, "{rows:?}");
+        assert!(rows.iter().all(|r| r.len() == HEADER.len()), "{rows:?}");
+    }
 }
