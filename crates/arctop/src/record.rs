@@ -1,6 +1,6 @@
 //! `--record`: TUI'deki her snapshot'ı CSV dosyasına bir satır olarak yazar.
 
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::path::Path;
 use std::time::Instant;
 
@@ -33,15 +33,26 @@ pub struct Recorder {
 }
 
 impl Recorder {
-    /// Dosyayı oluşturur (varsa üzerine yazar) ve başlık satırını yazar.
+    /// Dosyayı ekleme kipinde açar (yoksa oluşturur). Başlık satırı yalnızca
+    /// dosya yeni ya da boşsa yazılır; mevcut içerik korunur.
     pub fn create(path: &Path) -> anyhow::Result<Self> {
-        let file = File::create(path)
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
             .with_context(|| format!("kayıt dosyası açılamadı: {}", path.display()))?;
+        let is_empty = file
+            .metadata()
+            .with_context(|| format!("kayıt dosyası okunamadı: {}", path.display()))?
+            .len()
+            == 0;
         let mut writer = csv::Writer::from_writer(file);
-        writer
-            .write_record(HEADER)
-            .context("CSV başlığı yazılamadı")?;
-        writer.flush().context("CSV başlığı yazılamadı")?;
+        if is_empty {
+            writer
+                .write_record(HEADER)
+                .context("CSV başlığı yazılamadı")?;
+            writer.flush().context("CSV başlığı yazılamadı")?;
+        }
         Ok(Self {
             writer,
             origin: None,
@@ -166,13 +177,37 @@ mod tests {
     }
 
     #[test]
-    fn create_overwrites_existing_file() {
-        let tmp = TempFile::new("overwrite");
-        std::fs::write(&tmp.0, "eski içerik\n").unwrap();
-        let rec = Recorder::create(&tmp.0).unwrap();
+    fn create_appends_without_repeating_header() {
+        let tmp = TempFile::new("append");
+        let t0 = Instant::now();
+
+        let mut rec = Recorder::create(&tmp.0).unwrap();
+        rec.write(&Snapshot::empty(t0)).unwrap();
         drop(rec);
+
+        let mut rec = Recorder::create(&tmp.0).unwrap();
+        rec.write(&Snapshot::empty(t0)).unwrap();
+        drop(rec);
+
+        let rows = read_rows(&tmp.0);
+        assert_eq!(rows.len(), 3, "başlık bir kez + 2 satır: {rows:?}");
+        assert_eq!(rows[0], HEADER);
+        assert_ne!(rows[1], HEADER);
+        assert_ne!(rows[2], HEADER);
+    }
+
+    #[test]
+    fn create_preserves_existing_content_and_writes_header_for_empty_file() {
+        let tmp = TempFile::new("existing");
+        std::fs::write(&tmp.0, "eski içerik\n").unwrap();
+        drop(Recorder::create(&tmp.0).unwrap());
         let content = std::fs::read_to_string(&tmp.0).unwrap();
-        assert!(!content.contains("eski"));
-        assert_eq!(content.lines().count(), 1, "yalnızca başlık olmalı");
+        assert_eq!(content, "eski içerik\n", "mevcut dosyaya başlık eklenmez");
+
+        let empty = TempFile::new("empty");
+        std::fs::write(&empty.0, "").unwrap();
+        drop(Recorder::create(&empty.0).unwrap());
+        let content = std::fs::read_to_string(&empty.0).unwrap();
+        assert_eq!(content.lines().count(), 1, "boş dosyaya başlık yazılır");
     }
 }
