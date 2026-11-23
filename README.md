@@ -157,6 +157,8 @@ arctop --once --json | jq .power_w
 arctop --record out.csv       # TUI açıkken her ölçümü CSV'ye ekle (--once ile birlikte kullanılamaz)
 ```
 
+`--record` dosyası yoksa oluşturur, varsa sonuna ekler. İlk sütun `session_start` (RFC 3339, UTC) her kayıt oturumunda sabittir; `elapsed_ms` ise her oturumda 0'dan başladığı için aynı dosyaya eklenen oturumlar bu sütunla ayırt edilir. `session_start` sütunu olmayan eski bir arctop dosyasına eklenirse biçimler karışmasın diye satırlar eski 14 sütunlu biçimde yazılır ve bir uyarı basılır; arctop kaydı olmayan (başlığı tanınmayan) dosya ise reddedilir, yeni bir dosya adı kullanın.
+
 `--once` Δ gerektiren metrikler (güç, motor doluluğu) için iki örnek arasında `--interval` kadar bekler.
 
 ### Kısayollar
