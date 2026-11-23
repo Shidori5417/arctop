@@ -41,6 +41,13 @@ fn main() -> anyhow::Result<()> {
         run_once(&fs, &cli, &dev)
     } else {
         let recorder = cli.record.as_deref().map(Recorder::create).transpose()?;
+        if recorder.as_ref().is_some_and(Recorder::is_legacy) {
+            eprintln!(
+                "arctop: uyarı: kayıt dosyası eski biçimde (session_start sütunu yok); \
+                 biçimler karışmasın diye satırlar eski biçimde yazılıyor. \
+                 Oturumları ayırt etmek için yeni bir dosya kullanın."
+            );
+        }
         ui::theme::init(ui::theme::detect_mode());
         run_tui(fs, dev, Duration::from_millis(cli.interval), recorder)
     }

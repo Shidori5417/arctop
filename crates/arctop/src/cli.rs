@@ -22,7 +22,8 @@ pub struct Cli {
     /// --once çıktısını JSON yaz
     #[arg(long, requires = "once")]
     pub json: bool,
-    /// TUI açıkken her ölçümü CSV'ye ekle
+    /// TUI açıkken her ölçümü CSV'ye ekle (her oturum kendi `session_start` değeriyle ayrılır;
+    /// eski biçimli bir dosyaya eski biçimde eklenir, tanınmayan dosya reddedilir)
     #[arg(long, value_name = "DOSYA", conflicts_with = "once")]
     pub record: Option<PathBuf>,
 }
