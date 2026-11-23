@@ -1,5 +1,8 @@
 # arctop
 
+[![CI](https://github.com/Shidori5417/arctop/actions/workflows/ci.yml/badge.svg)](https://github.com/Shidori5417/arctop/actions/workflows/ci.yml)
+[![License: MIT/Apache-2.0](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](#lisans)
+
 Intel Arc GPU'lar için terminal tabanlı canlı izleme aracı. Rust ve ratatui ile yazılır. nvtop'un Arc tarafında eksik kalan kısımlarını tamamlamak için tasarlandı.
 
 - Frekans, güç (W), sıcaklık, fan, voltaj
