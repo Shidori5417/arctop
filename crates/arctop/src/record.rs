@@ -1,6 +1,7 @@
 //! `--record`: TUI'deki her snapshot'ı CSV dosyasına bir satır olarak yazar.
 
 use std::fs::{File, OpenOptions};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::time::Instant;
 
@@ -36,16 +37,28 @@ impl Recorder {
     /// Dosyayı ekleme kipinde açar (yoksa oluşturur). Başlık satırı yalnızca
     /// dosya yeni ya da boşsa yazılır; mevcut içerik korunur.
     pub fn create(path: &Path) -> anyhow::Result<Self> {
-        let file = OpenOptions::new()
+        let mut file = OpenOptions::new()
+            .read(true)
             .create(true)
             .append(true)
             .open(path)
             .with_context(|| format!("kayıt dosyası açılamadı: {}", path.display()))?;
-        let is_empty = file
+        let len = file
             .metadata()
             .with_context(|| format!("kayıt dosyası okunamadı: {}", path.display()))?
-            .len()
-            == 0;
+            .len();
+        let is_empty = len == 0;
+        if !is_empty {
+            // Son satır '\n' ile bitmiyorsa yeni satır eski satıra yapışmasın.
+            let mut last = [0u8; 1];
+            file.seek(SeekFrom::Start(len - 1))
+                .and_then(|_| file.read_exact(&mut last))
+                .with_context(|| format!("kayıt dosyası okunamadı: {}", path.display()))?;
+            if last[0] != b'\n' {
+                file.write_all(b"\n")
+                    .with_context(|| format!("kayıt dosyasına yazılamadı: {}", path.display()))?;
+            }
+        }
         let mut writer = csv::Writer::from_writer(file);
         if is_empty {
             writer
@@ -209,5 +222,19 @@ mod tests {
         drop(Recorder::create(&empty.0).unwrap());
         let content = std::fs::read_to_string(&empty.0).unwrap();
         assert_eq!(content.lines().count(), 1, "boş dosyaya başlık yazılır");
+    }
+
+    #[test]
+    fn create_terminates_unterminated_last_row() {
+        let tmp = TempFile::new("noeol");
+        std::fs::write(&tmp.0, "a,b,c").unwrap();
+        let mut rec = Recorder::create(&tmp.0).unwrap();
+        rec.write(&Snapshot::empty(Instant::now())).unwrap();
+        drop(rec);
+        let content = std::fs::read_to_string(&tmp.0).unwrap();
+        let mut lines = content.lines();
+        assert_eq!(lines.next(), Some("a,b,c"));
+        assert!(lines.next().unwrap().starts_with("0,"));
+        assert_eq!(lines.next(), None);
     }
 }
