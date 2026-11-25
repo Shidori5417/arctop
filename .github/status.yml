@@ -1,0 +1,10 @@
+# Read by github.com/Shidori5417 (profile README) and the portfolio site.
+# Edit when the project's state changes; no need to touch it otherwise.
+# status: active | prototype | released | maintenance | paused | archived
+status: active
+focus:
+  en: "TUI v2 is done; preparing the first release (v0.1)."
+  tr: "TUI v2 tamamlandı; ilk sürüm (v0.1) hazırlanıyor."
+note:
+  en: "Primary target is Arc A750 (i915); xe driver and Battlemage support are secondary targets."
+  tr: "Birincil hedef Arc A750 (i915); xe sürücüsü ve Battlemage desteği ikincil hedef."
