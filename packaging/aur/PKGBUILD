@@ -7,8 +7,12 @@ url='https://github.com/Shidori5417/arctop'
 license=('MIT' 'Apache-2.0')
 depends=('gcc-libs')
 makedepends=('cargo')
+# UYARI: Bu kaynak https://github.com/Shidori5417/arctop/archive/v0.1.0.tar.gz adresine bakar.
+# Bu tarball'ı üreten v0.1.0 git tag'i ve release'i henüz yok; tag/release oluşturulmadan
+# makepkg bu PKGBUILD ile başarısız olur (404). Tag yayınlanınca sha256sums'ı gerçek
+# tarball özetiyle değiştirin ve .SRCINFO'yu `makepkg --printsrcinfo > .SRCINFO` ile yeniden üretin.
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-# ilk release sonrası güncellenecek
+# ilk release sonrası güncellenecek (şu an SKIP; doğrulama için gerçek sha256 gerekir)
 sha256sums=('SKIP')
 
 prepare() {
